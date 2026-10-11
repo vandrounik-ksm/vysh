@@ -74,6 +74,10 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: PKGBUILD для Arch Linux
+        env:
+          TAG: ${{ github.ref_name }}
+        run: python3 tools/release/make_pkgbuild.py dist
       - name: Текст релиза из CHANGELOG.md
         id: notes
         env:

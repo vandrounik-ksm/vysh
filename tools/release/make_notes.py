@@ -48,6 +48,7 @@ KINDS = [
     (".deb", "Debian / Ubuntu", "DEB", "A81D33", "debian", "white"),
     (".rpm", "Fedora / openSUSE", "RPM", "294172", "fedora", "white"),
     ("linux-x64.tar.gz", "Linux", "tar.gz", "333333", "linux", "white"),
+    ("PKGBUILD", "Arch Linux", "PKGBUILD", "1793D1", "archlinux", "white"),
     (".apk", "Android", "APK", "3DDC84", "android", "white"),
 ]
 
@@ -99,6 +100,7 @@ out.append(
     "\n### 📦 Установка\n"
     "**Windows:** распакуйте zip и запустите `vysh.exe`. "
     "SmartScreen может предупредить о неизвестном издателе: «Подробнее» → «Выполнить в любом случае».\n\n"
+    f"**Arch Linux:** `mkdir vysh && cd vysh && curl -LO https://github.com/{repo}/releases/download/{tag}/PKGBUILD && makepkg -si`\n\n"
     "**Linux:** распакуйте архив и запустите `./vysh` (нужны `libgtk-3` и `libsecret-1`).\n\n"
     "**Обновление:** замените папку с программой: хосты, настройки и пароли хранятся отдельно и сохранятся."
 )

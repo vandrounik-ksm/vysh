@@ -72,7 +72,18 @@
 > При первом запуске Windows SmartScreen может предупредить о неизвестном издателе:
 > «Подробнее» → «Выполнить в любом случае».
 
-### Linux
+### Arch Linux
+Готовый PKGBUILD лежит в каждом релизе, ставится через pacman как обычный пакет:
+```sh
+mkdir vysh && cd vysh
+curl -LO https://github.com/vyto4ka/vysh/releases/latest/download/PKGBUILD
+makepkg -si
+```
+Обновление: те же команды в пустой папке. Удаление: `sudo pacman -R vysh-bin`.
+
+Программа ставится в `/opt/vysh`, команда `vysh`, ярлык появится в меню приложений. Для паролей нужен Secret Service: `gnome-keyring`, KWallet или KeePassXC.
+
+### Другие дистрибутивы
 ```sh
 mkdir -p ~/.local/opt/vysh
 tar -xzf vysh-<версия>-linux-x64.tar.gz -C ~/.local/opt/vysh
@@ -81,7 +92,7 @@ tar -xzf vysh-<версия>-linux-x64.tar.gz -C ~/.local/opt/vysh
 Нужны `libgtk-3` и `libsecret-1`, в дистрибутивах с графическим окружением они обычно уже есть.
 
 ### Обновление
-Удалите папку со старой версией и распакуйте новую. Хосты, настройки и пароли хранятся отдельно и никуда не денутся.
+Windows и архив для Linux: удалите папку со старой версией и распакуйте новую. Хосты, настройки и пароли хранятся отдельно и никуда не денутся.
 
 ## Где хранятся данные
 
@@ -143,6 +154,7 @@ powershell -ExecutionPolicy Bypass -File tools\build-windows.ps1
 - [x] Диагностика подключения
 - [x] Цвета из системы и дотов: акцент Windows, pywal, matugen, caelestia, с обновлением на лету
 - [x] Свой заголовок окна с вкладками (Windows / GNOME / KDE)
+- [x] Пакет для Arch Linux (PKGBUILD в релизах)
 - [ ] AppImage, .deb, AUR, установщик для Windows, поддержка отечественных дистрибутивов
 - [ ] Сниппеты, проброс портов, jump host, разделение вкладки на панели
 - [ ] ssh-agent / Pageant, хранилище с мастер-паролем

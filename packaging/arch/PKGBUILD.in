@@ -1,0 +1,58 @@
+# Maintainer: vyto4ka <https://github.com/vyto4ka>
+#
+# Шаблон: CI подставляет версию и контрольную сумму и прикладывает готовый
+# PKGBUILD к каждому релизу (tools/release/make_pkgbuild.py).
+# Ставит готовую сборку из GitHub Releases, Flutter для этого не нужен.
+
+pkgname=vysh-bin
+pkgver=@PKGVER@
+pkgrel=1
+pkgdesc='Minimal SSH manager with tabs, terminal and SFTP (Material 3)'
+arch=('x86_64')
+url='https://github.com/vyto4ka/vysh'
+license=('unknown')  # заменить, когда в репозитории появится LICENSE
+depends=('gtk3' 'libsecret' 'glibc' 'hicolor-icon-theme')
+optdepends=(
+  'gnome-keyring: хранилище паролей (или KWallet / KeePassXC с Secret Service)'
+  'iputils: пинг на экране ошибки подключения'
+  'traceroute: трассировка на экране ошибки подключения'
+)
+provides=('vysh')
+conflicts=('vysh')
+# Flutter-сборку не трогаем: strip портит libapp.so.
+options=('!strip' '!debug')
+source=("vysh-${pkgver}.tar.gz::${url}/releases/download/v${pkgver}/vysh-v${pkgver}-linux-x64.tar.gz")
+noextract=("vysh-${pkgver}.tar.gz")
+sha256sums=('@SHA256@')
+
+package() {
+  # Архив без корневой папки: внутри сразу vysh, lib/, data/.
+  install -dm755 "${pkgdir}/opt/vysh"
+  bsdtar -xf "${srcdir}/vysh-${pkgver}.tar.gz" -C "${pkgdir}/opt/vysh"
+  chmod 755 "${pkgdir}/opt/vysh/vysh"
+
+  # Обёртка, а не симлинк: движок Flutter ищет lib/ и data/ рядом с бинарником.
+  install -Dm755 /dev/stdin "${pkgdir}/usr/bin/vysh" <<'SH'
+#!/bin/sh
+exec /opt/vysh/vysh "$@"
+SH
+
+  install -Dm644 "${pkgdir}/opt/vysh/data/flutter_assets/assets/icon/vysh_256.png" \
+    "${pkgdir}/usr/share/icons/hicolor/256x256/apps/vysh.png"
+
+  # Имя файла = app_id окна (APPLICATION_ID в linux/CMakeLists.txt),
+  # чтобы на Wayland панели и доки находили иконку.
+  install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/dev.vysh.vysh.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=vysh
+GenericName=SSH Client
+Comment=SSH manager with terminal and SFTP
+Exec=vysh
+Icon=vysh
+Terminal=false
+Categories=Network;RemoteAccess;System;TerminalEmulator;
+Keywords=ssh;sftp;terminal;
+StartupWMClass=dev.vysh.vysh
+DESKTOP
+}

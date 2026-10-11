@@ -42,6 +42,29 @@ git push origin main v0.2.0
 
 Тег с дефисом (`v0.3.0-beta.1`) публикуется как pre-release и не становится «Latest».
 
+## Arch Linux
+
+CI сам собирает `PKGBUILD` из шаблона `packaging/arch/PKGBUILD.in`: подставляет версию и sha256 Linux-архива и прикладывает файл к релизу. Ссылка `releases/latest/download/PKGBUILD` всегда ведёт на последнюю версию.
+
+Проверить шаблон локально (на Arch):
+```sh
+TAG=v0.3.3 python3 tools/release/make_pkgbuild.py dist   # нужен dist/vysh-v0.3.3-linux-x64.tar.gz
+cd dist && makepkg -si
+namcap PKGBUILD
+```
+
+### Публикация в AUR (по желанию)
+
+Тогда ставить можно будет через `yay -S vysh-bin` / `paru -S vysh-bin`.
+
+1. Аккаунт на [aur.archlinux.org](https://aur.archlinux.org) и SSH-ключ в профиле.
+2. Один раз: `git clone ssh://aur@aur.archlinux.org/vysh-bin.git`
+3. На каждый релиз: скачать `PKGBUILD` из релиза в эту папку, затем
+   ```sh
+   makepkg --printsrcinfo > .SRCINFO
+   git add PKGBUILD .SRCINFO && git commit -m "vysh 0.3.3" && git push
+   ```
+
 ## Если что-то пошло не так
 
 **Сборка упала.** Почините, затем перенесите тег на новый коммит:
