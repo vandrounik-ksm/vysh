@@ -50,7 +50,14 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
     final scheme = Theme.of(context).colorScheme;
     final error = TextStyle(color: scheme.error, fontSize: 13);
 
-    final details = switch (s.colorSource) {
+    final mobile = DesktopEnv.isMobile;
+    // Android: только Monet (хранится как preset) или Catppuccin.
+    final selected = mobile && s.colorSource != ColorSource.catppuccin
+        ? ColorSource.preset
+        : s.colorSource;
+
+    final details = switch (selected) {
+      ColorSource.preset when mobile => const SizedBox.shrink(),
       ColorSource.preset => Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -139,8 +146,8 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
                   segments: [
                     ButtonSegment(
                       value: ColorSource.preset,
-                      icon: const Icon(Icons.palette_outlined),
-                      label: Text(strings.colorSourcePreset),
+                      icon: Icon(mobile ? Icons.auto_awesome_outlined : Icons.palette_outlined),
+                      label: Text(mobile ? 'Monet' : strings.colorSourcePreset),
                     ),
                     if (!kIsWeb && (Platform.isWindows || Platform.isLinux))
                       ButtonSegment(
@@ -158,14 +165,13 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
                         icon: const Icon(Icons.wallpaper),
                         label: Text(strings.colorSourceDots),
                       ),
-                    if (!DesktopEnv.isMobile)
-                      const ButtonSegment(
+                    const ButtonSegment(
                         value: ColorSource.catppuccin,
                         icon: Icon(Icons.coffee_outlined),
                         label: Text('Catppuccin'),
                       ),
                   ],
-                  selected: {s.colorSource},
+                  selected: {selected},
                   onSelectionChanged: (v) => ctrl.setColorSource(v.first),
                 ),
                 const SizedBox(height: 12),

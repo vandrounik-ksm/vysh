@@ -50,10 +50,9 @@ class SettingsPage extends ConsumerWidget {
                   icon: Icons.palette_outlined,
                   title: strings.appearanceSection,
                   children: [
-                    // На Android весь выбор цветов вырезан: только Monet
-                    // (или фиолетовый fallback), без сегментов и свотчей.
+                    // На Android цвета: Monet (или фиолетовый fallback) либо Catppuccin.
                     // У Catppuccin режим задаёт сам вариант (Latte светлый).
-                    if (s.colorSource != ColorSource.catppuccin || isMobile)
+                    if (s.colorSource != ColorSource.catppuccin)
                     SettingRow(
                       label: strings.themeTitle,
                       // Сегменты должны занять всю ширину карточки, а подпись
@@ -103,7 +102,7 @@ class SettingsPage extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    if (!DesktopEnv.isMobile) const ColorSourceSection(),
+                    const ColorSourceSection(),
                     const TitleBarSection(),
                     // На Android язык берётся из системы.
                     if (!isMobile)

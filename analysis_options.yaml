@@ -5,6 +5,7 @@ analyzer:
     - linux/**
     - android/**
     - web/**
+    - third_party/**
 include: package:flutter_lints/flutter.yaml
 
 linter:

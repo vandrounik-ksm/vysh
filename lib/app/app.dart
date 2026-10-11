@@ -38,10 +38,13 @@ class VyshApp extends ConsumerWidget {
       }
     });
 
-    // Android: выбора цветов нет - только Monet, при недоступности фиолетовый.
-    // Прочие платформы: как раньше, акцент системы / доты / свой цвет.
-    final e = DesktopEnv.isMobile ? null : (s.colorSource == ColorSource.preset ? null : ext);
-    final seed = DesktopEnv.isMobile
+    // Android: Monet (при недоступности фиолетовый) или Catppuccin.
+    // Прочие платформы: свой цвет / акцент системы / доты / Catppuccin.
+    final catppuccin = s.colorSource == ColorSource.catppuccin;
+    final e = DesktopEnv.isMobile
+        ? (catppuccin ? ext : null)
+        : (s.colorSource == ColorSource.preset ? null : ext);
+    final seed = DesktopEnv.isMobile && e == null
         ? (monet?.accentPrimary ?? const Color(0xFF6750A4))
         : (e?.seed ?? Color(s.seedColor));
 

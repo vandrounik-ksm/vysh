@@ -1144,6 +1144,9 @@ class _SessionViewState extends ConsumerState<SessionView>
             ),
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             keyboardType: TextInputType.text,
+            // Иначе Gboard и другие клавиатуры открываются в анонимном режиме
+            // (правка в third_party/xterm2, см. PATCHES.md).
+            enableIMEPersonalizedLearning: true,
             onKeyEvent: (focusNode, event) {
               if (event is KeyDownEvent) {
                 if (session.ctrlModifier) {
