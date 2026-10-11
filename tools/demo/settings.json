@@ -1,0 +1,9 @@
+{
+  "colorSource": "catppuccin",
+  "catppuccinFlavor": "mocha",
+  "catppuccinAccent": "mauve",
+  "titleBarMode": "custom",
+  "serverStats": true,
+  "pingHosts": true,
+  "language": "ru"
+}

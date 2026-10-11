@@ -52,6 +52,8 @@ class SettingsPage extends ConsumerWidget {
                   children: [
                     // На Android весь выбор цветов вырезан: только Monet
                     // (или фиолетовый fallback), без сегментов и свотчей.
+                    // У Catppuccin режим задаёт сам вариант (Latte светлый).
+                    if (s.colorSource != ColorSource.catppuccin || isMobile)
                     SettingRow(
                       label: strings.themeTitle,
                       // Сегменты должны занять всю ширину карточки, а подпись

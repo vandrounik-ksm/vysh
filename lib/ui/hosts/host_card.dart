@@ -233,11 +233,13 @@ class _Reachability extends ConsumerWidget {
         child: CircularProgressIndicator(strokeWidth: 2),
       ),
       error: (_, _) => const SizedBox.shrink(),
-      data: (ms) => Tooltip(
+      data: (r) {
+        final ms = r.ms;
+        return Tooltip(
         message: ms == null
             ? (strings.isRu
-                  ? 'Порт ${host.port} не отвечает'
-                  : 'Port ${host.port} is unreachable')
+                  ? 'Порт ${host.port} не отвечает${r.error == null ? '' : '\n${r.error}'}'
+                  : 'Port ${host.port} is unreachable${r.error == null ? '' : '\n${r.error}'}')
             : (strings.isRu
                   ? 'Порт ${host.port} доступен за $ms мс'
                   : 'Port ${host.port} reachable in ${ms}ms'),
@@ -250,7 +252,9 @@ class _Reachability extends ConsumerWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
-            ms == null ? 'нет' : (strings.isRu ? '$ms мс' : '${ms}ms'),
+            ms == null
+                ? (strings.isRu ? 'нет' : 'down')
+                : (strings.isRu ? '$ms мс' : '${ms}ms'),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -258,7 +262,8 @@ class _Reachability extends ConsumerWidget {
             ),
           ),
         ),
-      ),
+      );
+      },
     );
   }
 }

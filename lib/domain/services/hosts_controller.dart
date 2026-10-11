@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -76,16 +77,49 @@ final hostGroupsProvider = Provider<List<String>>((ref) {
   return groups;
 });
 
-/// Доступность хоста: время TCP-подключения к порту SSH в мс, или null.
-final reachabilityProvider =
-    FutureProvider.autoDispose.family<int?, (String, int)>((ref, target) async {
-  final sw = Stopwatch()..start();
+/// Доступность хоста: время TCP-подключения к порту SSH в мс
+/// или причина, по которой подключиться не удалось.
+typedef Reachability = ({int? ms, String? error});
+
+final reachabilityProvider = FutureProvider.autoDispose
+    .family<Reachability, (String, int)>((ref, target) async {
+  final host = target.$1.trim();
+  final port = target.$2;
+
+  // Адреса ищем сами: IPv4 первым. Иначе при сломанном IPv6 вся проверка
+  // уходила в таймаут на первом же адресе, хотя по IPv4 сервер отвечает.
+  List<InternetAddress> addrs;
   try {
-    final socket = await Socket.connect(target.$1, target.$2,
-        timeout: const Duration(seconds: 3));
-    socket.destroy();
-    return sw.elapsedMilliseconds;
-  } catch (_) {
-    return null;
+    addrs = await InternetAddress.lookup(host).timeout(const Duration(seconds: 4));
+  } catch (e) {
+    return (ms: null, error: 'DNS: ${_reason(e)}');
   }
+  addrs.sort((a, b) => (a.type == InternetAddressType.IPv4 ? 0 : 1)
+      .compareTo(b.type == InternetAddressType.IPv4 ? 0 : 1));
+
+  String? error;
+  // Вторая попытка - на случай потерянного пакета или лимита новых
+  // подключений на сервере (ufw limit, fail2ban).
+  for (var attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await Future<void>.delayed(const Duration(milliseconds: 700));
+    for (final addr in addrs.take(3)) {
+      final sw = Stopwatch()..start();
+      try {
+        final socket =
+            await Socket.connect(addr, port, timeout: const Duration(seconds: 4));
+        socket.destroy();
+        return (ms: sw.elapsedMilliseconds, error: null);
+      } catch (e) {
+        error = '${addr.address}: ${_reason(e)}';
+      }
+    }
+  }
+  return (ms: null, error: error);
 });
+
+String _reason(Object e) => switch (e) {
+      SocketException(:final osError?) => osError.message.trim(),
+      SocketException(:final message) => message,
+      TimeoutException() => 'timeout',
+      _ => e.toString(),
+    };

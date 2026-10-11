@@ -202,6 +202,12 @@ class _Transport implements SshTransport {
   }
 
   @override
+  Future<String> exec(String command) async {
+    final out = await _client.run(command, stderr: false);
+    return utf8.decode(out, allowMalformed: true);
+  }
+
+  @override
   Future<SftpSession> openSftp() async {
     try {
       return DartSsh2Sftp(await _client.sftp());

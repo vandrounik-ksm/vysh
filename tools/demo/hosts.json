@@ -1,0 +1,57 @@
+[
+  {
+    "id": "demo-web-01",
+    "label": "web-01",
+    "address": "localhost",
+    "port": 2201,
+    "username": "demo",
+    "auth": "key",
+    "keyPath": "__KEY__",
+    "group": "Production",
+    "color": 4281236827
+  },
+  {
+    "id": "demo-web-02",
+    "label": "web-02",
+    "address": "localhost",
+    "port": 2202,
+    "username": "demo",
+    "auth": "key",
+    "keyPath": "__KEY__",
+    "group": "Production",
+    "color": 4281236827
+  },
+  {
+    "id": "demo-db-01",
+    "label": "db-01",
+    "address": "localhost",
+    "port": 2203,
+    "username": "demo",
+    "auth": "key",
+    "keyPath": "__KEY__",
+    "group": "Production",
+    "color": 4278215076
+  },
+  {
+    "id": "demo-staging",
+    "label": "staging",
+    "address": "localhost",
+    "port": 2204,
+    "username": "demo",
+    "auth": "key",
+    "keyPath": "__KEY__",
+    "group": "Staging",
+    "color": 4287320064
+  },
+  {
+    "id": "demo-nas",
+    "label": "nas",
+    "address": "localhost",
+    "port": 2205,
+    "username": "demo",
+    "auth": "key",
+    "keyPath": "__KEY__",
+    "group": "Home lab",
+    "color": 4288430184
+  }
+]

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/app_settings.dart';
 import '../../domain/models/app_strings.dart';
+import '../../domain/models/catppuccin.dart';
 import '../../domain/models/external_colors.dart';
 import '../../domain/services/external_colors_controller.dart';
 import '../../domain/services/settings_controller.dart';
@@ -73,6 +74,12 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
               style: error,
             )
           : const SizedBox.shrink(),
+      ColorSource.catppuccin => _CatppuccinPicker(
+          flavor: s.catppuccinFlavor,
+          accent: s.catppuccinAccent,
+          onFlavor: ctrl.setCatppuccinFlavor,
+          onAccent: ctrl.setCatppuccinAccent,
+        ),
       ColorSource.dots => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -151,6 +158,12 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
                         icon: const Icon(Icons.wallpaper),
                         label: Text(strings.colorSourceDots),
                       ),
+                    if (!DesktopEnv.isMobile)
+                      const ButtonSegment(
+                        value: ColorSource.catppuccin,
+                        icon: Icon(Icons.coffee_outlined),
+                        label: Text('Catppuccin'),
+                      ),
                   ],
                   selected: {s.colorSource},
                   onSelectionChanged: (v) => ctrl.setColorSource(v.first),
@@ -161,7 +174,9 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
                   alignment: Alignment.topCenter,
                   child: details,
                 ),
-                if (s.colorSource != ColorSource.preset && ext != null) ...[
+                if (s.colorSource != ColorSource.preset &&
+                    s.colorSource != ColorSource.catppuccin &&
+                    ext != null) ...[
                   const SizedBox(height: 8),
                   _Preview(ext: ext, scheme: scheme),
                 ],
@@ -169,7 +184,9 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
             ),
           ),
         ),
-        if (s.colorSource != ColorSource.preset && !DesktopEnv.isMobile)
+        if (s.colorSource != ColorSource.preset &&
+            s.colorSource != ColorSource.catppuccin &&
+            !DesktopEnv.isMobile)
           SettingRow(
             label: strings.isRu ? 'Проверка цветов' : 'Color polling',
             child: SettingChoice<int>(
@@ -315,6 +332,145 @@ class _SeedSwatch extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Catppuccin: четыре варианта и 14 акцентов.
+class _CatppuccinPicker extends StatelessWidget {
+  const _CatppuccinPicker({
+    required this.flavor,
+    required this.accent,
+    required this.onFlavor,
+    required this.onAccent,
+  });
+
+  final String flavor;
+  final String accent;
+  final ValueChanged<String> onFlavor;
+  final ValueChanged<String> onAccent;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = catppuccinFlavor(flavor);
+    final outline = Theme.of(context).colorScheme.onSurface;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final f in catppuccinFlavors)
+              _FlavorCard(
+                flavor: f,
+                accent: accent,
+                selected: f.id == current.id,
+                onTap: () => onFlavor(f.id),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final a in catppuccinAccents)
+              Tooltip(
+                message: a,
+                child: InkWell(
+                  onTap: () => onAccent(a),
+                  customBorder: const CircleBorder(),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 30,
+                    height: 30,
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: a == accent ? outline : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: current[a],
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _FlavorCard extends StatelessWidget {
+  const _FlavorCard({
+    required this.flavor,
+    required this.accent,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final CatppuccinFlavor flavor;
+  final String accent;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final f = flavor;
+    final outline = Theme.of(context).colorScheme.onSurface;
+    Widget dot(String k) => Container(
+          width: 10,
+          height: 10,
+          margin: const EdgeInsets.only(right: 4),
+          decoration: BoxDecoration(color: f[k], shape: BoxShape.circle),
+        );
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: 120,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: f['base'],
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? outline : f['surface0'],
+            width: 2,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              f.name,
+              style: TextStyle(
+                color: f['text'],
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                dot(catppuccinAccents.contains(accent) ? accent : 'mauve'),
+                dot('red'),
+                dot('green'),
+                dot('yellow'),
+                dot('blue'),
+              ],
+            ),
+          ],
         ),
       ),
     );

@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 /// * Android: getApplicationDocumentsDirectory() / vysh
 /// * Windows: `%APPDATA%\vysh`
 /// * Linux: `$XDG_CONFIG_HOME/vysh` (обычно `~/.config/vysh`)
+/// * переменная `VYSH_CONFIG_DIR` (ПК) задаёт свою папку
 class AppPaths {
   AppPaths._();
 
@@ -48,6 +49,9 @@ class AppPaths {
         return _join(docs.path, 'vysh');
       }
       final env = Platform.environment;
+      // Отдельный профиль: демо-стенд для скриншотов, тесты (tools/demo).
+      final custom = env['VYSH_CONFIG_DIR'];
+      if (custom != null && custom.trim().isNotEmpty) return custom.trim();
       if (Platform.isWindows) {
         final base = env['APPDATA'] ?? env['USERPROFILE'] ?? '.';
         return _join(base, 'vysh');

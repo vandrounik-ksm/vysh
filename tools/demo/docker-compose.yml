@@ -1,0 +1,29 @@
+# Демо-серверы для скриншотов. Запуск: tools\demo\start.bat
+# Порты слушают только 127.0.0.1, снаружи стенд не виден.
+x-node: &node
+  build: .
+  restart: unless-stopped
+  volumes:
+    - ${VYSH_DEMO_DIR:?запустите через start.bat}/demo_key.pub:/authorized_keys:ro
+
+services:
+  web-01:
+    <<: *node
+    hostname: web-01
+    ports: ["127.0.0.1:2201:22"]
+  web-02:
+    <<: *node
+    hostname: web-02
+    ports: ["127.0.0.1:2202:22"]
+  db-01:
+    <<: *node
+    hostname: db-01
+    ports: ["127.0.0.1:2203:22"]
+  staging:
+    <<: *node
+    hostname: staging
+    ports: ["127.0.0.1:2204:22"]
+  nas:
+    <<: *node
+    hostname: nas
+    ports: ["127.0.0.1:2205:22"]

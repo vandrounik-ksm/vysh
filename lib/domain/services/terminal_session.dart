@@ -359,6 +359,15 @@ class TerminalSession extends ChangeNotifier {
     super.dispose();
   }
 
+  /// Выполнить команду на сервере отдельным каналом (для статистики).
+  Future<String> exec(String command) {
+    final transport = _transport;
+    if (transport == null || _status != SessionStatus.ready) {
+      return Future.error(StateError('Нет соединения с сервером'));
+    }
+    return transport.exec(command);
+  }
+
   /// Сбросить SFTP-канал (после ошибки), следующий [sftp] откроет новый.
   void resetSftp() {
     final old = _sftp;

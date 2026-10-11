@@ -24,6 +24,9 @@ enum ColorSource {
 
   /// Файлы дотов: свой colors.json, caelestia, pywal (Linux).
   dots,
+
+  /// Готовая тема Catppuccin (вариант и акцент - в настройках).
+  catppuccin,
 }
 
 /// Движок отрисовки Flutter. Выбирается до запуска движка (windows/runner/main.cpp,
@@ -91,6 +94,9 @@ class AppSettings {
     this.colorPollSec = 60,
     this.pauseHiddenTabs = true,
     this.renderer = Renderer.skia,
+    this.catppuccinFlavor = 'mocha',
+    this.catppuccinAccent = 'mauve',
+    this.serverStats = true,
   });
 
   final ThemeMode themeMode;
@@ -157,6 +163,15 @@ class AppSettings {
   /// Движок отрисовки (применяется после перезапуска).
   final Renderer renderer;
 
+  /// Catppuccin: latte, frappe, macchiato, mocha.
+  final String catppuccinFlavor;
+
+  /// Catppuccin: акцент (mauve, blue, pink…).
+  final String catppuccinAccent;
+
+  /// Нагрузка сервера в строке состояния терминала.
+  final bool serverStats;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     int? seedColor,
@@ -183,6 +198,9 @@ class AppSettings {
     int? colorPollSec,
     bool? pauseHiddenTabs,
     Renderer? renderer,
+    String? catppuccinFlavor,
+    String? catppuccinAccent,
+    bool? serverStats,
   }) =>
       AppSettings(
         themeMode: themeMode ?? this.themeMode,
@@ -212,6 +230,9 @@ class AppSettings {
         colorPollSec: colorPollSec ?? this.colorPollSec,
         pauseHiddenTabs: pauseHiddenTabs ?? this.pauseHiddenTabs,
         renderer: renderer ?? this.renderer,
+        catppuccinFlavor: catppuccinFlavor ?? this.catppuccinFlavor,
+        catppuccinAccent: catppuccinAccent ?? this.catppuccinAccent,
+        serverStats: serverStats ?? this.serverStats,
       );
 
   Map<String, Object?> toJson() => {
@@ -241,6 +262,9 @@ class AppSettings {
         'pauseHiddenTabs': pauseHiddenTabs,
         // Читается и нативным кодом до запуска движка - ключ не переименовывать.
         'renderer': renderer.name,
+        'catppuccinFlavor': catppuccinFlavor,
+        'catppuccinAccent': catppuccinAccent,
+        'serverStats': serverStats,
       };
 
   factory AppSettings.fromJson(Map<String, Object?> json) => AppSettings(
@@ -299,6 +323,9 @@ class AppSettings {
         renderer: json['renderer'] == 'impeller'
             ? Renderer.impeller
             : Renderer.skia,
+        catppuccinFlavor: json['catppuccinFlavor'] as String? ?? 'mocha',
+        catppuccinAccent: json['catppuccinAccent'] as String? ?? 'mauve',
+        serverStats: json['serverStats'] as bool? ?? true,
       );
 
   /// Верхний предел истории: xterm2 сразу резервирует список на столько строк.

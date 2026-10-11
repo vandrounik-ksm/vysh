@@ -1,0 +1,177 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../../domain/services/server_stats.dart';
+import '../../domain/services/terminal_session.dart';
+
+/// Нагрузка сервера в строке состояния: CPU, память, диск, сеть, аптайм.
+/// Опрашивает сервер, только пока вкладка на экране и окно не свёрнуто.
+class ServerStatsView extends StatefulWidget {
+  const ServerStatsView({
+    super.key,
+    required this.session,
+    required this.active,
+    required this.ru,
+    this.fallback,
+  });
+
+  final TerminalSession session;
+  final bool active;
+  final bool ru;
+
+  /// Что показать, если сервер не Linux и статистики нет (версия SSH).
+  final String? fallback;
+
+  @override
+  State<ServerStatsView> createState() => _ServerStatsViewState();
+}
+
+class _ServerStatsViewState extends State<ServerStatsView> {
+  static const _every = Duration(seconds: 3);
+
+  final _sampler = ServerStatsSampler();
+  ServerStats? _stats;
+  bool _unsupported = false;
+  bool _busy = false;
+  Timer? _timer;
+  AppLifecycleListener? _life;
+  bool _visible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _life = AppLifecycleListener(onStateChange: (s) {
+      _visible = s == AppLifecycleState.resumed || s == AppLifecycleState.inactive;
+      if (_visible) _poll();
+    });
+    _restart();
+  }
+
+  @override
+  void didUpdateWidget(ServerStatsView old) {
+    super.didUpdateWidget(old);
+    if (old.session != widget.session) {
+      _stats = null;
+      _unsupported = false;
+    }
+    if (old.active != widget.active || old.session != widget.session) _restart();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _life?.dispose();
+    super.dispose();
+  }
+
+  void _restart() {
+    _timer?.cancel();
+    _timer = null;
+    if (!widget.active || _unsupported) return;
+    _poll();
+    _timer = Timer.periodic(_every, (_) => _poll());
+  }
+
+  Future<void> _poll() async {
+    if (_busy || !_visible || !widget.active || _unsupported) return;
+    _busy = true;
+    try {
+      final raw = await widget.session
+          .exec(serverStatsCommand)
+          .timeout(const Duration(seconds: 5));
+      final s = _sampler.parse(raw, DateTime.now());
+      if (!mounted) return;
+      setState(() {
+        if (s == null) {
+          _unsupported = true;
+          _timer?.cancel();
+        } else {
+          _stats = s;
+        }
+      });
+    } catch (_) {
+      // Обрыв или медленный сервер: оставляем прошлые цифры до следующего раза.
+    } finally {
+      _busy = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final base = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    final dim = base?.copyWith(color: scheme.outline);
+    final s = _stats;
+
+    if (s == null) {
+      final text = _unsupported ? widget.fallback : null;
+      return text == null
+          ? const SizedBox.shrink()
+          : Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: dim);
+    }
+
+    final ru = widget.ru;
+    String pct(double v) => '${(v * 100).round()}%';
+    Color load(double v) => v >= 0.9
+        ? scheme.error
+        : (v >= 0.75 ? scheme.tertiary : scheme.onSurfaceVariant);
+
+    Widget item(IconData icon, String text, {Color? color, String? tip}) {
+      final w = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color ?? scheme.outline),
+          const SizedBox(width: 4),
+          Text(text, style: base?.copyWith(color: color)),
+        ],
+      );
+      return Padding(
+        padding: const EdgeInsets.only(right: 14),
+        child: tip == null ? w : Tooltip(message: tip, child: w),
+      );
+    }
+
+    String rate(double? v) =>
+        v == null ? '…' : '${formatBytes(v, ru: ru)}/${ru ? 'с' : 's'}';
+
+    return ClipRect(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        child: Row(
+          children: [
+            item(
+              Icons.speed_rounded,
+              s.cpu == null ? 'CPU …' : 'CPU ${pct(s.cpu!)}',
+              color: s.cpu == null ? null : load(s.cpu!),
+            ),
+            item(
+              Icons.memory_rounded,
+              '${ru ? 'ОЗУ' : 'RAM'} ${formatBytes(s.memUsed, ru: ru)} / ${formatBytes(s.memTotal, ru: ru)}',
+              color: load(s.mem),
+            ),
+            if (s.disk != null)
+              item(
+                Icons.storage_rounded,
+                '${ru ? 'Диск' : 'Disk'} ${pct(s.disk!)}',
+                color: load(s.disk!),
+                tip: '/  ${formatBytes(s.diskUsed!, ru: ru)} / ${formatBytes(s.diskTotal!, ru: ru)}',
+              ),
+            item(Icons.arrow_downward_rounded, rate(s.rxPerSec)),
+            item(Icons.arrow_upward_rounded, rate(s.txPerSec)),
+            item(
+              Icons.schedule_rounded,
+              formatUptime(s.uptime, ru: ru),
+              tip: ru ? 'Аптайм' : 'Uptime',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

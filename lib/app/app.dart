@@ -48,12 +48,13 @@ class VyshApp extends ConsumerWidget {
     // Доты задают тёмный/светлый режим - следуем им, если тема «Системная».
     var mode = s.themeMode;
     final dotsBrightness = e?.brightness;
-    if (mode == ThemeMode.system && dotsBrightness != null) {
+    // Catppuccin: у каждого варианта свой режим (Latte светлый, прочие тёмные).
+    if (dotsBrightness != null &&
+        (mode == ThemeMode.system || s.colorSource == ColorSource.catppuccin)) {
       mode = dotsBrightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light;
     }
 
-    ThemeData theme(Brightness b) =>
-        buildTheme(seed: seed, brightness: b, compact: s.compact, roles: e?.roles[b]);
+    ThemeData theme(Brightness b) => _cachedTheme(seed, b, s.compact, e?.roles[b]);
 
     return MaterialApp(
       title: 'vysh',
@@ -62,7 +63,9 @@ class VyshApp extends ConsumerWidget {
       themeMode: mode,
       theme: theme(Brightness.light),
       darkTheme: theme(Brightness.dark),
-      themeAnimationDuration: const Duration(milliseconds: 300),
+      // Без плавного перехода: анимация перестраивала всё окно вместе с
+      // терминалом на каждом кадре и заметно тормозила.
+      themeAnimationDuration: Duration.zero,
       locale: s.language == AppLanguage.ru
           ? const Locale('ru')
           : (s.language == AppLanguage.en ? const Locale('en') : null),
@@ -86,4 +89,17 @@ class VyshApp extends ConsumerWidget {
       home: const AppShell(),
     );
   }
+}
+
+/// Тема пересчитывается только при смене цветов, а не при любой настройке
+/// (ColorScheme.fromSeed и ThemeData дорогие, а VyshApp следит за всеми настройками).
+final _themeCache = <(int, Brightness, bool, Map<String, Color>?), ThemeData>{};
+
+ThemeData _cachedTheme(Color seed, Brightness b, bool compact, Map<String, Color>? roles) {
+  final key = (seed.toARGB32(), b, compact, roles);
+  final hit = _themeCache[key];
+  if (hit != null) return hit;
+  if (_themeCache.length > 8) _themeCache.clear();
+  return _themeCache[key] =
+      buildTheme(seed: seed, brightness: b, compact: compact, roles: roles);
 }

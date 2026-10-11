@@ -1,11 +1,15 @@
-# Нормализуем переводы строк: в репозитории LF, на checkout — как принято в ОС.
+# Нормализуем переводы строк: в репозитории LF, на checkout - как принято в ОС.
 * text=auto
 
-# Скрипты Windows — всегда CRLF, Linux — всегда LF.
+# Скрипты Windows - всегда CRLF, Linux - всегда LF.
 *.ps1 text eol=crlf
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.sh  text eol=lf
+
+# Файлы, которые попадают в Linux-контейнер демо-стенда.
+tools/demo/Dockerfile     text eol=lf
+tools/demo/bash_profile   text eol=lf
 
 # Бинарники
 *.png binary

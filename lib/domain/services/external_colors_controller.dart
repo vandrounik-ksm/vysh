@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../infra/platform/color_sources.dart';
 import '../models/app_settings.dart';
+import '../models/catppuccin.dart';
 import '../models/external_colors.dart';
 import 'settings_controller.dart';
 
@@ -35,6 +36,8 @@ class ExternalColorsController extends Notifier<ExternalColors?> {
   ExternalColors? build() {
     final source = ref.watch(settingsProvider.select((s) => s.colorSource));
     final dotsPath = ref.watch(settingsProvider.select((s) => s.dotsPath));
+    final flavor = ref.watch(settingsProvider.select((s) => s.catppuccinFlavor));
+    final accent = ref.watch(settingsProvider.select((s) => s.catppuccinAccent));
     _pollEvery = ref.watch(settingsProvider.select((s) => s.colorPollSec));
     _disposed = false;
     _gen++;
@@ -44,6 +47,9 @@ class ExternalColorsController extends Notifier<ExternalColors?> {
       case ColorSource.preset:
         notFound = false;
         return null;
+      case ColorSource.catppuccin:
+        notFound = false;
+        return catppuccinColors(flavor, accent);
       case ColorSource.system:
         if (kIsWeb) {
           notFound = false;

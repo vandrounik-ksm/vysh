@@ -69,6 +69,9 @@ class SettingsController extends Notifier<AppSettings> {
       _update(state.copyWith(confirmMultilinePaste: v));
   void setColorSource(ColorSource v) => _update(state.copyWith(colorSource: v));
   void setDotsPath(String v) => _update(state.copyWith(dotsPath: v));
+  void setCatppuccinFlavor(String v) => _update(state.copyWith(catppuccinFlavor: v));
+  void setCatppuccinAccent(String v) => _update(state.copyWith(catppuccinAccent: v));
+  void setServerStats(bool v) => _update(state.copyWith(serverStats: v));
   void setTitleBarMode(TitleBarMode v) =>
       _update(state.copyWith(titleBarMode: v));
   void setKeepAliveSeconds(int seconds) =>

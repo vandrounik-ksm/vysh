@@ -102,6 +102,9 @@ abstract interface class SshTransport {
   /// Открыть SFTP-канал поверх этого же соединения.
   Future<SftpSession> openSftp();
 
+  /// Выполнить команду в отдельном канале и вернуть её stdout.
+  Future<String> exec(String command);
+
   /// Завершается, когда соединение закрыто (штатно или по ошибке).
   Future<void> get done;
 
