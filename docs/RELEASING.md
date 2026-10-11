@@ -22,7 +22,7 @@
 version: 0.2.0+2   # +N - номер сборки, просто увеличивайте на 1
 ```
 
-То же самое в `lib/app/version.dart`: `appVersion` и `appBuildNumber`. Их показывает «Настройки → О программе».
+То же самое в `lib/app/version.dart`: `appVersion` и `vyshBuildNumber`. Их показывает «Настройки → О программе».
 
 Номер сборки на Android - это `versionCode`: он должен только расти, иначе новый APK не встанет поверх старого.
 

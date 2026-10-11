@@ -287,7 +287,7 @@ class SettingsPage extends ConsumerWidget {
                           'assets/icon/vysh_256.png',
                           width: 56,
                           height: 56,
-                          errorBuilder: (_, __, ___) => const Icon(Icons.dns_rounded, size: 56),
+                          errorBuilder: (_, _, _) => const Icon(Icons.dns_rounded, size: 56),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -300,7 +300,7 @@ class SettingsPage extends ConsumerWidget {
                               ),
                               if (buildDate.isNotEmpty)
                                 Text(
-                                  'build $appBuildNumber · $buildDate',
+                                  'build $vyshBuildNumber · $buildDate',
                                   style: theme.textTheme.labelSmall?.copyWith(
                                     color: scheme.onSurfaceVariant,
                                   ),

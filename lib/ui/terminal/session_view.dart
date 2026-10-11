@@ -5,6 +5,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// RenderTerminal нужен для координат ячеек, наружу xterm2 его не экспортирует.
+// ignore: implementation_imports
 import 'package:xterm2/src/ui/render.dart';
 import 'package:xterm2/xterm.dart';
 

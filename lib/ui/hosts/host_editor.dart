@@ -195,8 +195,9 @@ class _HostEditorSheetState extends ConsumerState<_HostEditorSheet> {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
-    if (warning != null)
+    if (warning != null) {
       messenger.showSnackBar(SnackBar(content: Text(warning)));
+    }
     if (connect) {
       ref
           .read(tabsProvider.notifier)
