@@ -1,6 +1,6 @@
 name: Release
 
-# Ставим тег vX.Y.Z → собираются Linux и Windows → файлы прикрепляются к релизу.
+# Ставим тег vX.Y.Z → собираются Linux, Windows и Android → файлы прикрепляются к релизу.
 on:
   push:
     tags: ['v*']
@@ -27,7 +27,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - run: flutter pub get
-      - run: flutter build linux --release
+      - run: flutter build linux --release --dart-define="BUILD_DATE=$(date -u '+%d.%m.%y %H:%M:%S')"
       - name: Упаковать tar.gz
         run: |
           cd build/linux/x64/release/bundle
@@ -47,7 +47,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - run: flutter pub get
-      - run: flutter build windows --release
+      - run: flutter build windows --release --dart-define="BUILD_DATE=$((Get-Date).ToUniversalTime().ToString('dd.MM.yy HH:mm:ss'))"
       - name: Упаковать zip
         shell: pwsh
         run: |
@@ -63,8 +63,63 @@ jobs:
           name: windows
           path: vysh-*-windows-x64.zip
 
+  android:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ключ подписи из секретов
+        id: key
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          # Без секретов APK не собираем: подписанный debug-ключом нельзя обновить поверх.
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::Нет секрета ANDROID_KEYSTORE_BASE64, APK пропущен (см. docs/RELEASING.md)"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/vysh-release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/vysh-release.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyPassword=$KEY_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+          } > android/key.properties
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        if: steps.key.outputs.ok == 'true'
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - if: steps.key.outputs.ok == 'true'
+        run: flutter pub get
+      - if: steps.key.outputs.ok == 'true'
+        run: flutter build apk --release --split-per-abi --dart-define="BUILD_DATE=$(date -u '+%d.%m.%y %H:%M:%S')"
+      - name: Переименовать APK
+        if: steps.key.outputs.ok == 'true'
+        run: |
+          for f in build/app/outputs/flutter-apk/app-*-release.apk; do
+            abi=$(basename "$f" | sed -E 's/^app-(.+)-release\.apk$/\1/')
+            cp "$f" "vysh-${GITHUB_REF_NAME}-android-${abi}.apk"
+          done
+      - uses: actions/upload-artifact@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          name: android
+          path: vysh-*-android-*.apk
+
   release:
-    needs: [linux, windows]
+    needs: [linux, windows, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

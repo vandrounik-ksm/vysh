@@ -38,14 +38,18 @@ class DartSsh2Connector implements SshConnector {
     if (InternetAddress.tryParse(r.address) == null) {
       log('Поиск адреса «${r.address}» (DNS)…');
       try {
-        final found = await InternetAddress.lookup(r.address).timeout(r.timeout);
+        final found = await InternetAddress.lookup(
+          r.address,
+        ).timeout(r.timeout);
         if (found.isEmpty) throw const SocketException('пустой ответ');
         log('DNS: ${found.map((a) => a.address).join(', ')}');
         target = found.first.address;
       } catch (e) {
         log('DNS: ошибка: $e');
-        throw SshFailure(SshFailureKind.network,
-            'Не удалось найти хост «${r.address}»: имя не разрешается через DNS');
+        throw SshFailure(
+          SshFailureKind.network,
+          'Не удалось найти хост «${r.address}»: имя не разрешается через DNS',
+        );
       }
     }
 
@@ -53,12 +57,13 @@ class DartSsh2Connector implements SshConnector {
     final sw = Stopwatch()..start();
     final SSHSocket socket;
     try {
-      socket = await SSHSocket.connect(target, r.port, timeout: r.timeout);
+      final raw = await Socket.connect(target, r.port, timeout: r.timeout);
+      socket = _NativeSshSocket(raw);
     } catch (e) {
       log('TCP: ошибка: $e');
       throw SshFailure(SshFailureKind.network, _networkMessage(e, r));
     }
-    log('TCP-соединение установлено за ${sw.elapsedMilliseconds} мс');
+    log('TCP-соединение установлено за ${sw.elapsedMilliseconds} ms');
 
     var hostKeyRejected = false;
     late final SSHClient client;
@@ -76,12 +81,12 @@ class DartSsh2Connector implements SshConnector {
       onUserInfoRequest: r.interactive == null
           ? null
           : (req) {
-              log('keyboard-interactive: ${req.prompts.map((p) => p.promptText.trim()).join(' | ')}');
-              return r.interactive!(
-                req.name,
-                req.instruction,
-                [for (final p in req.prompts) (text: p.promptText, echo: p.echo)],
+              log(
+                'keyboard-interactive: ${req.prompts.map((p) => p.promptText.trim()).join(' | ')}',
               );
+              return r.interactive!(req.name, req.instruction, [
+                for (final p in req.prompts) (text: p.promptText, echo: p.echo),
+              ]);
             },
       onVerifyHostKey: (type, fingerprint) async {
         final fp = utf8.decode(fingerprint);
@@ -95,7 +100,9 @@ class DartSsh2Connector implements SshConnector {
       onUserauthBanner: r.onBanner,
       onAuthenticated: () => log('Вход выполнен'),
       printDebug: (line) => log(line ?? '', true),
-      keepAliveInterval: const Duration(seconds: 15),
+      keepAliveInterval: r.keepAliveInterval <= Duration.zero
+          ? null
+          : r.keepAliveInterval,
       handshakeTimeout: r.timeout,
     );
 
@@ -104,7 +111,10 @@ class DartSsh2Connector implements SshConnector {
     } on SSHAuthFailError catch (e) {
       log('Аутентификация: ${e.message}');
       client.close();
-      throw const SshFailure(SshFailureKind.auth, 'Сервер отклонил логин, пароль или ключ');
+      throw const SshFailure(
+        SshFailureKind.auth,
+        'Сервер отклонил логин, пароль или ключ',
+      );
     } on SSHAuthAbortError catch (e) {
       log('Прервано: ${e.message}${e.reason == null ? '' : ' (${e.reason})'}');
       client.close();
@@ -140,13 +150,20 @@ class DartSsh2Connector implements SshConnector {
         return parse();
       }
     } on SSHKeyDecryptError {
-      throw SshFailure(SshFailureKind.keyPassphrase,
-          'Неверная парольная фраза для ключа ${key.label}');
+      throw SshFailure(
+        SshFailureKind.keyPassphrase,
+        'Неверная парольная фраза для ключа ${key.label}',
+      );
     } on ArgumentError {
-      throw SshFailure(SshFailureKind.keyPassphrase,
-          'Для ключа ${key.label} нужна парольная фраза');
+      throw SshFailure(
+        SshFailureKind.keyPassphrase,
+        'Для ключа ${key.label} нужна парольная фраза',
+      );
     } catch (e) {
-      throw SshFailure(SshFailureKind.config, 'Не удалось прочитать ключ ${key.label}: $e');
+      throw SshFailure(
+        SshFailureKind.config,
+        'Не удалось прочитать ключ ${key.label}: $e',
+      );
     }
   }
 
@@ -242,4 +259,32 @@ class _Shell implements SshShell {
       _session.close();
     } catch (_) {}
   }
+}
+
+class _NativeSshSocket implements SSHSocket {
+  _NativeSshSocket(this._socket) {
+    try {
+      _socket.setOption(SocketOption.tcpNoDelay, true);
+    } catch (_) {}
+  }
+
+  final Socket _socket;
+
+  @override
+  Stream<Uint8List> get stream => _socket;
+
+  @override
+  StreamSink<List<int>> get sink => _socket;
+
+  @override
+  Future<void> get done => _socket.done;
+
+  @override
+  Future<void> close() => _socket.close();
+
+  @override
+  void destroy() => _socket.destroy();
+
+  @override
+  Future<void> flush() => _socket.flush();
 }

@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/app_settings.dart';
+import '../../domain/models/app_strings.dart';
 import '../../domain/services/settings_controller.dart';
+import '../../infra/platform/desktop_env.dart';
 import 'setting_row.dart';
 
-/// Частота проверки доступности хостов (секция «Хосты»).
 class PingSettings extends ConsumerWidget {
   const PingSettings({super.key});
 
@@ -13,21 +14,32 @@ class PingSettings extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(settingsProvider);
     final ctrl = ref.read(settingsProvider.notifier);
+    final strings = AppStrings.of(context, s.language);
+
     if (!s.pingHosts) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SettingRow(
-          label: 'Интервал',
+          label: strings.isRu ? 'Интервал проверки' : 'Ping interval',
           child: SettingChoice<int>(
             value: s.pingIntervalSec,
-            options: const [(15, '15 с'), (30, '30 с'), (60, '1 мин'), (300, '5 мин')],
+            options: [
+              (15, strings.isRu ? '15 с' : '15s'),
+              (30, strings.isRu ? '30 с' : '30s'),
+              (60, strings.isRu ? '1 мин' : '1 min'),
+              (120, strings.isRu ? '2 мин' : '2 min'),
+              (300, strings.isRu ? '5 мин' : '5 min'),
+            ],
             onChanged: ctrl.setPingIntervalSec,
           ),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Только пока список хостов на экране'),
+          title: Text(strings.isRu
+              ? 'Только пока список хостов на экране'
+              : 'Only while the host list is visible'),
           value: s.pingOnlyVisible,
           onChanged: ctrl.setPingOnlyVisible,
         ),
@@ -36,7 +48,6 @@ class PingSettings extends ConsumerWidget {
   }
 }
 
-/// Секция «Производительность».
 class PerformanceSection extends ConsumerWidget {
   const PerformanceSection({super.key});
 
@@ -44,14 +55,38 @@ class PerformanceSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(settingsProvider);
     final ctrl = ref.read(settingsProvider.notifier);
-    final theme = Theme.of(context);
-    final restart = s.renderer != startupRenderer;
+    final strings = AppStrings.of(context, s.language);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SettingRow(
-          label: 'Отрисовка',
+          label: strings.isRu ? 'История терминала' : 'Scrollback lines',
+          child: SettingChoice<int>(
+            value: s.scrollbackLines,
+            options: [
+              (1000, '1 000'),
+              (5000, '5 000'),
+              (10000, '10 000'),
+              (50000, '50 000'),
+              (100000, '100 000'),
+              (1000000, strings.isRu ? '1 млн' : '1M'),
+            ],
+            onChanged: ctrl.setScrollbackLines,
+          ),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(strings.isRu
+              ? 'Пауза анимаций в фоновых вкладках'
+              : 'Pause animations in background tabs'),
+          value: s.pauseHiddenTabs,
+          onChanged: ctrl.setPauseHiddenTabs,
+        ),
+        // На Android движок выбирает сам Flutter, переключатель только для ПК.
+        if (!DesktopEnv.isMobile)
+        SettingRow(
+          label: strings.isRu ? 'Отрисовка' : 'Renderer',
           child: Wrap(
             spacing: 12,
             runSpacing: 6,
@@ -62,30 +97,16 @@ class PerformanceSection extends ConsumerWidget {
                 options: const [(Renderer.skia, 'Skia'), (Renderer.impeller, 'Impeller')],
                 onChanged: ctrl.setRenderer,
               ),
-              if (restart)
-                Text('после перезапуска',
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
+              if (s.renderer != startupRenderer)
+                Text(
+                  strings.isRu ? 'после перезапуска' : 'after restart',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.primary),
+                ),
             ],
           ),
-        ),
-        SettingRow(
-          label: 'История терминала',
-          child: SettingChoice<int>(
-            value: s.scrollbackLines,
-            options: const [
-              (1000, '1 тыс.'),
-              (10000, '10 тыс.'),
-              (100000, '100 тыс.'),
-              (AppSettings.maxScrollback, '1 млн'),
-            ],
-            onChanged: ctrl.setScrollbackLines,
-          ),
-        ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Пауза анимаций в фоновых вкладках'),
-          value: s.pauseHiddenTabs,
-          onChanged: ctrl.setPauseHiddenTabs,
         ),
       ],
     );

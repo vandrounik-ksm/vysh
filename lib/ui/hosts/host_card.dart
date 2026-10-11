@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/models/app_strings.dart';
 import '../../domain/models/host.dart';
 import '../../domain/services/hosts_controller.dart';
 import '../../domain/services/settings_controller.dart';
 import '../../domain/services/tabs_controller.dart';
+import '../../infra/platform/desktop_env.dart';
 import '../theme/app_theme.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/modifiers.dart';
@@ -38,15 +40,25 @@ class HostCard extends ConsumerWidget {
     }
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    AppStrings strings,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить хост?'),
-        content: Text('«${host.title}» будет удалён из списка.'),
+        title: Text(strings.deleteHostTitle),
+        content: Text(strings.deleteHostDesc(host.title)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(strings.delete),
+          ),
         ],
       ),
     );
@@ -58,99 +70,156 @@ class HostCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final accent = Color(host.color);
+    final lang = ref.watch(settingsProvider.select((s) => s.language));
+    final strings = AppStrings.of(context, lang);
 
     return ContextMenuArea(
-      child: Builder(builder: (areaContext) => Card(
-      color: selected ? scheme.secondaryContainer : null,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: selected ? scheme.primary : Colors.transparent, width: 2),
-      ),
-      child: InkWell(
-        onTap: () => _onTap(ref),
-        onSecondaryTapUp: (d) =>
-            ContextMenuArea.of(areaContext)?.open(d.globalPosition, _items(context, ref)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: selected ? scheme.primary : accent.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(selected ? 22 : 14),
-                ),
-                child: selected
-                    ? Icon(Icons.check_rounded, color: scheme.onPrimary, size: 24)
-                    : Icon(Icons.dns_rounded, color: accent, size: 22),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(host.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall),
-                    const SizedBox(height: 2),
-                    Text(host.displayAddress,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: monoStyle(context, size: 12, color: scheme.onSurfaceVariant)),
+      child: Builder(
+        builder: (areaContext) => Card(
+          color: selected ? scheme.secondaryContainer : null,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: selected ? scheme.primary : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          child: InkWell(
+            onTap: () => _onTap(ref),
+            // На телефоне Ctrl нет - выбор долгим нажатием. На ПК долгое
+            // нажатие мышью срабатывало вместо клика, там оно выключено.
+            onLongPress: DesktopEnv.isMobile ? onToggleSelect : null,
+            onSecondaryTapUp: (d) => ContextMenuArea.of(
+              areaContext,
+            )?.open(d.globalPosition, _items(context, ref, strings)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? scheme.primary
+                          : accent.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(selected ? 22 : 14),
+                    ),
+                    child: selected
+                        ? Icon(Icons.check_rounded, color: scheme.onPrimary, size: 24)
+                        : Icon(Icons.dns_rounded, color: accent, size: 22),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          host.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          host.displayAddress,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: monoStyle(
+                            context,
+                            size: 12,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (ref.watch(
+                    settingsProvider.select((s) => s.pingHosts),
+                  )) ...[
+                    const SizedBox(width: 8),
+                    _Reachability(host: host, strings: strings),
                   ],
-                ),
+                  const SizedBox(width: 4),
+                  if (selecting)
+                    Checkbox(
+                      value: selected,
+                      onChanged: (_) => onToggleSelect?.call(),
+                    )
+                  else
+                    MenuIconButton(
+                      tooltip: strings.actions,
+                      items: _items(context, ref, strings),
+                    ),
+                ],
               ),
-              if (ref.watch(settingsProvider.select((s) => s.pingHosts)))
-                _Reachability(host: host),
-              if (selecting)
-                Checkbox(value: selected, onChanged: (_) => onToggleSelect?.call())
-              else
-                MenuIconButton(tooltip: 'Действия', items: _items(context, ref)),
-            ],
+            ),
           ),
         ),
       ),
-      )),
     );
   }
 
-  List<Widget> _items(BuildContext context, WidgetRef ref) {
+  List<Widget> _items(BuildContext context, WidgetRef ref, AppStrings strings) {
     final scheme = Theme.of(context).colorScheme;
     return [
-      menuItem('Подключиться',
-          icon: Icons.play_arrow_rounded,
-          onPressed: () => ref.read(tabsProvider.notifier).openHost(host)),
-      menuItem('Изменить',
-          icon: Icons.edit_outlined, onPressed: () => showHostEditor(context, host: host)),
-      menuItem('Дублировать',
-          icon: Icons.copy_all_outlined,
-          onPressed: () => showHostEditor(context, host: host, duplicate: true)),
+      menuItem(
+        strings.isRu ? 'Подключиться' : 'Connect',
+        icon: Icons.play_arrow_rounded,
+        onPressed: () => ref.read(tabsProvider.notifier).openHost(host),
+      ),
+      menuItem(
+        strings.edit,
+        icon: Icons.edit_outlined,
+        onPressed: () => showHostEditor(context, host: host),
+      ),
+      menuItem(
+        strings.duplicate,
+        icon: Icons.copy_all_outlined,
+        onPressed: () => showHostEditor(context, host: host, duplicate: true),
+      ),
       if (onToggleSelect != null)
-        menuItem(selected ? 'Снять выбор' : 'Выбрать',
-            icon: Icons.check_box_outlined, onPressed: onToggleSelect),
-      menuItem('Забыть пароль', icon: Icons.key_off_outlined, onPressed: () {
-        ref.read(hostsProvider.notifier).forgetSecrets(host.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Сохранённый пароль для «${host.title}» удалён')),
-        );
-      }),
+        menuItem(
+          selected
+              ? (strings.isRu ? 'Снять выбор' : 'Deselect')
+              : (strings.isRu ? 'Выбрать' : 'Select'),
+          icon: Icons.check_box_outlined,
+          onPressed: onToggleSelect,
+        ),
+      menuItem(
+        strings.forgetPassword,
+        icon: Icons.key_off_outlined,
+        onPressed: () {
+          ref.read(hostsProvider.notifier).forgetSecrets(host.id);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                strings.isRu
+                    ? 'Сохранённый пароль для «${host.title}» удалён'
+                    : 'Saved password for «${host.title}» removed',
+              ),
+            ),
+          );
+        },
+      ),
       menuDivider(),
-      menuItem('Удалить',
-          icon: Icons.delete_outline,
-          color: scheme.error,
-          onPressed: () => _confirmDelete(context, ref)),
+      menuItem(
+        strings.delete,
+        icon: Icons.delete_outline,
+        color: scheme.error,
+        onPressed: () => _confirmDelete(context, ref, strings),
+      ),
     ];
   }
 }
 
 class _Reachability extends ConsumerWidget {
-  const _Reachability({required this.host});
+  const _Reachability({required this.host, required this.strings});
 
   final Host host;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -166,16 +235,22 @@ class _Reachability extends ConsumerWidget {
       error: (_, _) => const SizedBox.shrink(),
       data: (ms) => Tooltip(
         message: ms == null
-            ? 'Порт ${host.port} не отвечает'
-            : 'Порт ${host.port} доступен за $ms мс',
+            ? (strings.isRu
+                  ? 'Порт ${host.port} не отвечает'
+                  : 'Port ${host.port} is unreachable')
+            : (strings.isRu
+                  ? 'Порт ${host.port} доступен за $ms мс'
+                  : 'Port ${host.port} reachable in ${ms}ms'),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: (ms == null ? scheme.error : Colors.green).withValues(alpha: 0.14),
+            color: (ms == null ? scheme.error : Colors.green).withValues(
+              alpha: 0.14,
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
-            ms == null ? 'нет' : '$ms мс',
+            ms == null ? 'нет' : (strings.isRu ? '$ms мс' : '${ms}ms'),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,

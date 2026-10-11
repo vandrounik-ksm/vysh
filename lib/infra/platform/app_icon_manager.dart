@@ -1,0 +1,48 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+
+class MonetColors {
+  const MonetColors({
+    required this.accent,
+    required this.accentPrimary,
+    required this.background,
+  });
+
+  final Color accent;
+  final Color accentPrimary;
+  final Color background;
+}
+
+abstract final class AppIconManager {
+  static const _channel = MethodChannel('uwu.vyto4ka.vysh/app_icon');
+
+  static Future<MonetColors?> getMonetColors() async {
+    if (kIsWeb) return null;
+    try {
+      if (!Platform.isAndroid) return null;
+      final res = await _channel.invokeMapMethod<String, dynamic>('getMonetColors');
+      if (res != null) {
+        final accent = (res['accent'] as num?)?.toInt();
+        final accentPrimary = (res['accentPrimary'] as num?)?.toInt();
+        final bg = (res['background'] as num?)?.toInt();
+        if (accent != null && bg != null) {
+          return MonetColors(
+            accent: Color(accent),
+            accentPrimary: Color(accentPrimary ?? accent),
+            background: Color(bg),
+          );
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<void> setIcon() async {
+    if (kIsWeb) return;
+    try {
+      if (!Platform.isAndroid) return;
+      await _channel.invokeMethod<bool>('setIcon');
+    } catch (_) {}
+  }
+}

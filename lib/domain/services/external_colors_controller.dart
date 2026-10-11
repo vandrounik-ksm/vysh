@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -44,9 +45,17 @@ class ExternalColorsController extends Notifier<ExternalColors?> {
         notFound = false;
         return null;
       case ColorSource.system:
-        _reload(() => Platform.isWindows ? ColorSources.windowsAccent() : ColorSources.portalAccent());
+        if (kIsWeb) {
+          notFound = false;
+          return null;
+        }
+        _reload(() => (!kIsWeb && Platform.isWindows) ? ColorSources.windowsAccent() : ColorSources.portalAccent());
         _watchSystem();
       case ColorSource.dots:
+        if (kIsWeb) {
+          notFound = false;
+          return null;
+        }
         _reload(() => ColorSources.dots(dotsPath));
         _watchDots(dotsPath);
     }
@@ -96,15 +105,16 @@ class ExternalColorsController extends Notifier<ExternalColors?> {
   }
 
   void _watchSystem() {
+    if (kIsWeb) return;
     if (Platform.isWindows) {
       // Акцент меняют в «Параметрах» - значит, наше окно в это время не в фокусе.
       // Перечитываем реестр, когда окно снова получает фокус, плюс запасной опрос
       // с интервалом из настроек.
-      // Раньше был опрос раз в 4 с: это запуск reg.exe 15 раз в минуту.
       _life = AppLifecycleListener(onResume: _schedule);
       _poll();
       return;
     }
+    if (!Platform.isLinux) return;
     // Linux: слушаем сигнал SettingChanged портала, плюс редкий опрос на всякий случай.
     Process.start('gdbus', [
       'monitor', '--session',

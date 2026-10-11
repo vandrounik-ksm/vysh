@@ -10,6 +10,7 @@ import '../../domain/services/settings_controller.dart';
 import '../../domain/services/sftp_actions.dart';
 import '../../domain/services/tabs_controller.dart';
 import '../../domain/services/transfer_queue.dart';
+import '../../infra/platform/desktop_env.dart';
 import '../../infra/platform/local_files.dart';
 import '../theme/app_theme.dart';
 import '../widgets/context_menu.dart';
@@ -64,12 +65,15 @@ class _SftpPaneState extends ConsumerState<SftpPane> {
   SftpActions? get _actions {
     final session = ref.read(tabsProvider.notifier).sessionOf(widget.tab.id);
     if (session == null) return null;
-    final dir = ref.read(settingsProvider).downloadsDir;
     return SftpActions(
       tabId: widget.tab.id,
       session: session,
       queue: ref.read(transferQueueProvider.notifier),
-      downloadsDir: dir.isEmpty ? LocalFiles.defaultDownloadsDir() : dir,
+      // На Android - системная Download, на ПК - папка из настроек.
+      downloadsDir: () {
+        final dir = ref.read(settingsProvider).downloadsDir;
+        return DesktopEnv.isMobile || dir.isEmpty ? LocalFiles.defaultDownloadsDir() : dir;
+      }(),
     );
   }
 
@@ -185,7 +189,10 @@ class _SftpPaneState extends ConsumerState<SftpPane> {
     await _run(() async {
       final path = await _actions?.download(entries);
       if (path != null) {
-        _toast('Скачивание в ${_parentDir(path)}');
+        // На Android файл публикуется в системную папку Download.
+        _toast(DesktopEnv.isMobile
+            ? 'Скачивание в папку Download'
+            : 'Скачивание в ${_parentDir(path)}');
       }
     }, refresh: false);
   }

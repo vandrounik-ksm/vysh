@@ -67,7 +67,9 @@ for suffix, label, kind, color, logo, logo_color in KINDS:
     for name in files:
         if name.endswith(suffix):
             url = f"https://github.com/{repo}/releases/download/{tag}/{quote(name)}"
-            img = badge(label, kind, color, logo, logo_color)
+            # APK по архитектурам: на кнопке видно, какой брать.
+            m = re.search(r"android-(.+)\.apk$", name)
+            img = badge(label, m.group(1) if m else kind, color, logo, logo_color)
             buttons.append(f'<a href="{url}"><img src="{img}" alt="{label} {kind}"></a>')
 
 # ── Ссылка «все изменения» с прошлого тега ───────────────────────────
@@ -101,6 +103,8 @@ out.append(
     "**Windows:** распакуйте zip и запустите `vysh.exe`. "
     "SmartScreen может предупредить о неизвестном издателе: «Подробнее» → «Выполнить в любом случае».\n\n"
     f"**Arch Linux:** `mkdir vysh && cd vysh && curl -LO https://github.com/{repo}/releases/download/{tag}/PKGBUILD && makepkg -si`\n\n"
+    "**Android:** большинству телефонов нужен `arm64-v8a`, старым 32-битным `armeabi-v7a`. "
+    "Новая версия ставится поверх старой.\n\n"
     "**Linux:** распакуйте архив и запустите `./vysh` (нужны `libgtk-3` и `libsecret-1`).\n\n"
     "**Обновление:** замените папку с программой: хосты, настройки и пароли хранятся отдельно и сохранятся."
 )

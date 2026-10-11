@@ -1,13 +1,16 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/version.dart';
+import '../../domain/models/app_settings.dart';
+import '../../domain/models/app_strings.dart';
 import '../../domain/services/settings_controller.dart';
+import '../../infra/platform/desktop_env.dart';
 import '../../infra/platform/local_files.dart';
 import '../../infra/storage/app_paths.dart';
 import '../theme/app_theme.dart';
@@ -23,13 +26,19 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(settingsProvider);
     final ctrl = ref.read(settingsProvider.notifier);
+    final strings = AppStrings.of(context, s.language);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final isMobile = DesktopEnv.isMobile;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+      padding: EdgeInsets.fromLTRB(
+        isMobile ? 16 : 28,
+        20,
+        isMobile ? 16 : 28,
+        28,
+      ),
       children: [
-
         Align(
           alignment: Alignment.topLeft,
           child: ConstrainedBox(
@@ -39,28 +48,78 @@ class SettingsPage extends ConsumerWidget {
               children: [
                 _Section(
                   icon: Icons.palette_outlined,
-                  title: 'Внешний вид',
+                  title: strings.appearanceSection,
                   children: [
+                    // На Android весь выбор цветов вырезан: только Monet
+                    // (или фиолетовый fallback), без сегментов и свотчей.
                     SettingRow(
-                      label: 'Тема',
-                      child: SegmentedButton<ThemeMode>(
-                        segments: const [
-                          ButtonSegment(value: ThemeMode.system, label: Text('Системная'),
-                              icon: Icon(Icons.brightness_auto)),
-                          ButtonSegment(value: ThemeMode.light, label: Text('Светлая'),
-                              icon: Icon(Icons.light_mode_outlined)),
-                          ButtonSegment(value: ThemeMode.dark, label: Text('Тёмная'),
-                              icon: Icon(Icons.dark_mode_outlined)),
-                        ],
-                        selected: {s.themeMode},
-                        onSelectionChanged: (v) => ctrl.setThemeMode(v.first),
+                      label: strings.themeTitle,
+                      // Сегменты должны занять всю ширину карточки, а подпись
+                      // сжиматься, а не резаться многоточием.
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<ThemeMode>(
+                          showSelectedIcon: false,
+                          style: const ButtonStyle(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: WidgetStatePropertyAll(
+                              EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            ),
+                            textStyle: WidgetStatePropertyAll(
+                              TextStyle(fontSize: 13),
+                            ),
+                          ),
+                          segments: [
+                            ButtonSegment(
+                              value: ThemeMode.system,
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(strings.themeSystem),
+                              ),
+                              icon: const Icon(Icons.brightness_auto, size: 18),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.light,
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(strings.themeLight),
+                              ),
+                              icon: const Icon(Icons.light_mode_outlined, size: 18),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.dark,
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(strings.themeDark),
+                              ),
+                              icon: const Icon(Icons.dark_mode_outlined, size: 18),
+                            ),
+                          ],
+                          selected: {s.themeMode},
+                          onSelectionChanged: (v) => ctrl.setThemeMode(v.first),
+                        ),
                       ),
                     ),
-                    const ColorSourceSection(),
+                    if (!DesktopEnv.isMobile) const ColorSourceSection(),
                     const TitleBarSection(),
+                    // На Android язык берётся из системы.
+                    if (!isMobile)
+                      SettingRow(
+                        label: strings.languageTitle,
+                        child: SettingChoice<AppLanguage>(
+                          value: s.language,
+                          options: [
+                            (AppLanguage.auto, strings.languageAuto),
+                            (AppLanguage.ru, strings.languageRu),
+                            (AppLanguage.en, strings.languageEn),
+                          ],
+                          onChanged: ctrl.setLanguage,
+                        ),
+                      ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Компактный интерфейс'),
+                      title: Text(strings.compactUi),
                       value: s.compact,
                       onChanged: ctrl.setCompact,
                     ),
@@ -68,41 +127,61 @@ class SettingsPage extends ConsumerWidget {
                 ),
                 _Section(
                   icon: Icons.dns_outlined,
-                  title: 'Хосты',
+                  title: strings.hostsSection,
                   children: [
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Проверять доступность хостов'),
+                      title: Text(strings.pingHostsTitle),
                       value: s.pingHosts,
                       onChanged: ctrl.setPingHosts,
                     ),
                     const PingSettings(),
+                    const SizedBox(height: 8),
+                    SettingRow(
+                      label: strings.keepAliveGlobalTitle,
+                      child: SettingChoice<int>(
+                        value: s.keepAliveSeconds,
+                        options: [
+                          (0, strings.isRu ? 'Выкл.' : 'Off'),
+                          (15, strings.isRu ? '15 с' : '15s'),
+                          (30, strings.isRu ? '30 с' : '30s'),
+                          (60, strings.isRu ? '1 мин' : '1 min'),
+                          (120, strings.isRu ? '2 мин' : '2 min'),
+                          (300, strings.isRu ? '5 мин' : '5 min'),
+                        ],
+                        onChanged: ctrl.setKeepAliveSeconds,
+                      ),
+                    ),
                   ],
                 ),
                 _Section(
                   icon: Icons.terminal,
-                  title: 'Терминал',
+                  title: strings.terminalSection,
                   children: [
                     SettingRow(
-                      label: 'Размер шрифта',
+                      label: strings.fontSizeTitle,
                       child: SizedBox(
                         width: 320,
                         child: Row(
                           children: [
                             Expanded(
                               child: Slider(
-                                min: 9,
-                                max: 24,
-                                divisions: 15,
-                                value: s.terminalFontSize.clamp(9, 24).toDouble(),
+                                min: 8,
+                                max: 32,
+                                divisions: 24,
+                                value: s.terminalFontSize
+                                    .clamp(8, 32)
+                                    .toDouble(),
                                 label: s.terminalFontSize.round().toString(),
                                 onChanged: ctrl.setTerminalFontSize,
                               ),
                             ),
                             SizedBox(
                               width: 32,
-                              child: Text('${s.terminalFontSize.round()}',
-                                  textAlign: TextAlign.end),
+                              child: Text(
+                                '${s.terminalFontSize.round()}',
+                                textAlign: TextAlign.end,
+                              ),
                             ),
                           ],
                         ),
@@ -117,70 +196,90 @@ class SettingsPage extends ConsumerWidget {
                       ),
                       child: Text(
                         'root@server:~\$ htop',
-                        style: monoStyle(context,
-                            size: s.terminalFontSize, color: scheme.onSurface),
+                        style: monoStyle(
+                          context,
+                          size: s.terminalFontSize,
+                          color: scheme.onSurface,
+                        ),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(strings.rememberTerminalFontSizeTitle),
+                      value: s.rememberTerminalFontSize,
+                      onChanged: ctrl.setRememberTerminalFontSize,
+                    ),
+                    // Строка Ctrl/Esc/стрелок над экранной клавиатурой - только телефон.
+                    if (isMobile)
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(strings.accessoryBarTitle),
+                      value: s.showAccessoryBar,
+                      onChanged: ctrl.setShowAccessoryBar,
                     ),
                     const SizedBox(height: 8),
                     const ClipboardSection(),
                   ],
                 ),
-                const _Section(
-                  icon: Icons.speed,
-                  title: 'Производительность',
-                  children: [PerformanceSection()],
-                ),
                 _Section(
-                  icon: Icons.folder_outlined,
-                  title: 'Данные',
-                  children: [
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Папка для скачанных файлов'),
-                      subtitle: Text(
-                          s.downloadsDir.isEmpty ? LocalFiles.defaultDownloadsDir() : s.downloadsDir,
-                          style: monoStyle(context, size: 12, color: scheme.onSurfaceVariant)),
-                      trailing: Wrap(
-                        spacing: 4,
-                        children: [
-                          if (s.downloadsDir.isNotEmpty)
-                            IconButton(
-                              tooltip: 'По умолчанию',
-                              icon: const Icon(Icons.restart_alt),
-                              onPressed: () => ctrl.setDownloadsDir(''),
-                            ),
-                          IconButton(
-                            tooltip: 'Выбрать папку',
-                            icon: const Icon(Icons.folder_open),
-                            onPressed: () async {
-                              final dir = await getDirectoryPath();
-                              if (dir != null) ctrl.setDownloadsDir(dir);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Папка с данными'),
-                      subtitle: Text(AppPaths.configDir.path,
-                          style: monoStyle(context, size: 12, color: scheme.onSurfaceVariant)),
-                      trailing: IconButton(
-                        tooltip: 'Скопировать путь',
-                        icon: const Icon(Icons.copy),
-                        onPressed: () {
-                          Clipboard.setData(ClipboardData(text: AppPaths.configDir.path));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Путь скопирован')),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                  icon: Icons.speed,
+                  title: strings.isRu ? 'Производительность' : 'Performance',
+                  children: const [PerformanceSection()],
                 ),
+                // Папки - только на компьютере: на Android файлы идут в системную Download.
+                if (!isMobile)
+                  _Section(
+                    icon: Icons.folder_outlined,
+                    title: strings.isRu ? 'Данные' : 'Data',
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(strings.isRu ? 'Папка для скачанных файлов' : 'Downloads folder'),
+                        subtitle: Text(
+                            s.downloadsDir.isEmpty ? LocalFiles.defaultDownloadsDir() : s.downloadsDir,
+                            style: monoStyle(context, size: 12, color: scheme.onSurfaceVariant)),
+                        trailing: Wrap(
+                          spacing: 4,
+                          children: [
+                            if (s.downloadsDir.isNotEmpty)
+                              IconButton(
+                                tooltip: strings.isRu ? 'По умолчанию' : 'Default',
+                                icon: const Icon(Icons.restart_alt),
+                                onPressed: () => ctrl.setDownloadsDir(''),
+                              ),
+                            IconButton(
+                              tooltip: strings.isRu ? 'Выбрать папку' : 'Choose folder',
+                              icon: const Icon(Icons.folder_open),
+                              onPressed: () async {
+                                final dir = await getDirectoryPath();
+                                if (dir != null) ctrl.setDownloadsDir(dir);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(strings.isRu ? 'Папка с данными' : 'Data folder'),
+                        subtitle: Text(AppPaths.configDir.path,
+                            style: monoStyle(context, size: 12, color: scheme.onSurfaceVariant)),
+                        trailing: IconButton(
+                          tooltip: strings.isRu ? 'Скопировать путь' : 'Copy path',
+                          icon: const Icon(Icons.copy),
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: AppPaths.configDir.path));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(strings.isRu ? 'Путь скопирован' : 'Path copied')),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 _Section(
                   icon: Icons.info_outline,
-                  title: 'О программе',
+                  title: strings.aboutApp,
                   children: [
                     Row(
                       children: [
@@ -188,16 +287,26 @@ class SettingsPage extends ConsumerWidget {
                           'assets/icon/vysh_256.png',
                           width: 56,
                           height: 56,
-                          cacheWidth: (56 * MediaQuery.devicePixelRatioOf(context)).ceil(),
-                          filterQuality: FilterQuality.medium,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.dns_rounded, size: 56),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('vysh $appVersion', style: theme.textTheme.titleMedium),
-                              const _MemoryUsage(),
+                              Text(
+                                'vysh $appVersion',
+                                style: theme.textTheme.titleMedium,
+                              ),
+                              if (buildDate.isNotEmpty)
+                                Text(
+                                  'build $appBuildNumber · $buildDate',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              const SizedBox(height: 4),
+                              if (!kIsWeb) const _MemoryUsage(),
                             ],
                           ),
                         ),
@@ -215,7 +324,11 @@ class SettingsPage extends ConsumerWidget {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.icon, required this.title, required this.children});
+  const _Section({
+    required this.icon,
+    required this.title,
+    required this.children,
+  });
 
   final IconData icon;
   final String title;
@@ -262,7 +375,10 @@ class _MemoryUsageState extends State<_MemoryUsage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final mb = (ProcessInfo.currentRss / (1024 * 1024)).round();
+    int mb = 0;
+    try {
+      mb = (ProcessInfo.currentRss / (1024 * 1024)).round();
+    } catch (_) {}
     final style = theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
     return Row(
       children: [
@@ -271,7 +387,7 @@ class _MemoryUsageState extends State<_MemoryUsage> {
         Flexible(
           child: Text(
             kDebugMode
-                ? 'Память: $mb МБ (отладочная сборка)'
+                ? 'Память: $mb МБ (debug)'
                 : 'Память: $mb МБ',
             style: style,
           ),

@@ -4,12 +4,13 @@
 
 # vysh
 
-**Минималистичный и красивый SSH-менеджер для Windows и Linux**
+**Минималистичный и красивый SSH-менеджер для Windows, Linux и Android**
 
 ![Flutter](https://img.shields.io/badge/Flutter-02569B?logo=flutter&logoColor=white)
 ![Dart](https://img.shields.io/badge/Dart-0175C2?logo=dart&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&logoColor=black)
+![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=black)
 ![Material 3](https://img.shields.io/badge/Material-3-757575?logo=materialdesign&logoColor=white)
 
 [Скачать](../../releases/latest) · [Возможности](#возможности) · [Горячие клавиши](#горячие-клавиши) · [Темы](docs/THEMES.md) · [Что нового](CHANGELOG.md) · [Сборка](#сборка-из-исходников)
@@ -62,6 +63,14 @@
 - Свой заголовок окна с вкладками на Windows, GNOME и KDE; в тайлинговых WM (Hyprland, sway, i3) обычное окно без рамок и хаков
 - Экономный: отрисовка через Skia (в 2-3 раза меньше памяти, чем с Impeller), фоновые проверки только когда их видно, всё настраивается
 - Окно открывается там же и того же размера, где его закрыли (на Wayland позицию решает композитор)
+- Русский и английский интерфейс
+
+### 📱 Android
+- Цвета и иконка из системной палитры Monet (Material You)
+- Строка клавиш над клавиатурой: Esc, Ctrl, Alt, Tab, Home/End, PgUp/PgDn, `^C`-подобные сочетания и кнопка SFTP
+- Меню выделения в терминале: копировать, вставить, вырезать, выделить всё, поделиться
+- Сессии не рвутся в фоне: уведомление держит соединения живыми
+- Скачанные по SFTP файлы попадают в общую папку «Загрузки», без запроса разрешений
 
 ## Установка
 
@@ -91,15 +100,21 @@ tar -xzf vysh-<версия>-linux-x64.tar.gz -C ~/.local/opt/vysh
 ```
 Нужны `libgtk-3` и `libsecret-1`, в дистрибутивах с графическим окружением они обычно уже есть.
 
+### Android
+1. Скачайте APK со страницы [релизов](../../releases/latest): `arm64-v8a` подходит почти всем телефонам, `armeabi-v7a` старым 32-битным
+2. Установите, разрешив установку из этого источника
+
+Новая версия ставится поверх старой, хосты и пароли остаются.
+
 ### Обновление
 Windows и архив для Linux: удалите папку со старой версией и распакуйте новую. Хосты, настройки и пароли хранятся отдельно и никуда не денутся.
 
 ## Где хранятся данные
 
-| | Windows | Linux |
-|---|---|---|
-| Хосты, настройки, `known_hosts.json` | `%APPDATA%\vysh` | `~/.config/vysh` |
-| Пароли и парольные фразы | DPAPI (привязаны к учётной записи) | Secret Service (gnome-keyring, KWallet, KeePassXC) |
+| | Windows | Linux | Android |
+|---|---|---|---|
+| Хосты, настройки, `known_hosts.json` | `%APPDATA%\vysh` | `~/.config/vysh` | внутреннее хранилище приложения |
+| Пароли и парольные фразы | DPAPI (привязаны к учётной записи) | Secret Service (gnome-keyring, KWallet, KeePassXC) | Android Keystore |
 
 Файлы с хостами и настройками это обычный JSON без секретов: их можно хранить в git или синхронизировать через Syncthing.
 
@@ -137,12 +152,21 @@ powershell -ExecutionPolicy Bypass -File tools\build-windows.ps1
 
 Для Linux дополнительно: `ninja-build libgtk-3-dev libsecret-1-dev`, затем `flutter build linux --release`.
 
+Для Android нужен Android SDK (ставится с Android Studio):
+```sh
+flutter run -d <телефон>                       # отладка
+./tools/build_local.sh apk                     # APK по архитектурам → build/app/outputs/flutter-apk/
+```
+Подпись релизного APK описана в [docs/RELEASING.md](docs/RELEASING.md#android).
+
 ### Релизы
-Сборки делает GitHub Actions: тег `vX.Y.Z` → Windows-zip и Linux-архив в [Releases](../../releases), текст релиза берётся из [CHANGELOG.md](CHANGELOG.md). Порядок действий описан в [docs/RELEASING.md](docs/RELEASING.md).
+Сборки делает GitHub Actions: тег `vX.Y.Z` → Windows-zip, Linux-архив, PKGBUILD и APK в [Releases](../../releases), текст релиза берётся из [CHANGELOG.md](CHANGELOG.md). Порядок действий описан в [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Стек
 
 [Flutter](https://flutter.dev) · [Riverpod](https://riverpod.dev) · [dartssh2](https://pub.dev/packages/dartssh2) (SSH и SFTP) · [xterm2](https://pub.dev/packages/xterm2) (терминал) · [flutter_secure_storage](https://pub.dev/packages/flutter_secure_storage)
+
+Версию для Android сделал [Gitveu](https://github.com/Gitveu) ([vysh-apk](https://github.com/Gitveu/vysh-apk)).
 
 Подробности в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), история изменений в [CHANGELOG.md](CHANGELOG.md).
 
@@ -155,6 +179,7 @@ powershell -ExecutionPolicy Bypass -File tools\build-windows.ps1
 - [x] Цвета из системы и дотов: акцент Windows, pywal, matugen, caelestia, с обновлением на лету
 - [x] Свой заголовок окна с вкладками (Windows / GNOME / KDE)
 - [x] Пакет для Arch Linux (PKGBUILD в релизах)
+- [x] Android
 - [ ] AppImage, .deb, AUR, установщик для Windows, поддержка отечественных дистрибутивов
 - [ ] Сниппеты, проброс портов, jump host, разделение вкладки на панели
 - [ ] ssh-agent / Pageant, хранилище с мастер-паролем

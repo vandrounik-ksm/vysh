@@ -1,6 +1,6 @@
 # Как выпустить версию
 
-Релиз полностью собирает GitHub Actions: от вас - запись в CHANGELOG, версия и тег.
+Релиз (Windows, Linux, PKGBUILD для Arch, APK) полностью собирает GitHub Actions: от вас - запись в CHANGELOG, версия и тег.
 
 ## 1. CHANGELOG.md
 
@@ -22,7 +22,9 @@
 version: 0.2.0+2   # +N - номер сборки, просто увеличивайте на 1
 ```
 
-И ту же версию в `lib/app/version.dart` - её показывает «Настройки → О программе».
+То же самое в `lib/app/version.dart`: `appVersion` и `appBuildNumber`. Их показывает «Настройки → О программе».
+
+Номер сборки на Android - это `versionCode`: он должен только расти, иначе новый APK не встанет поверх старого.
 
 ## 3. Коммит и тег
 
@@ -64,6 +66,52 @@ namcap PKGBUILD
    makepkg --printsrcinfo > .SRCINFO
    git add PKGBUILD .SRCINFO && git commit -m "vysh 0.3.3" && git push
    ```
+
+## Android
+
+CI собирает APK под каждую архитектуру (`arm64-v8a`, `armeabi-v7a`, `x86_64`), если в репозитории есть секреты с ключом подписи. Без них сборка Android пропускается с предупреждением, остальное выходит как обычно.
+
+Ключ (`vysh-release.jks`) и пароли в git не кладутся никогда: кто получил ключ, может выпустить «обновление» vysh, которое телефоны примут как настоящее. А если ключ потерять, обновлять уже установленные APK будет нечем.
+
+### Секреты в GitHub
+
+Settings → Secrets and variables → Actions → New repository secret:
+
+| Секрет | Что положить |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | файл `vysh-release.jks` в base64 |
+| `ANDROID_STORE_PASSWORD` | `storePassword` из key.properties |
+| `ANDROID_KEY_PASSWORD` | `keyPassword` |
+| `ANDROID_KEY_ALIAS` | `keyAlias` |
+
+base64 на Windows (cmd), результат в буфер обмена:
+```bat
+certutil -encodehex -f vysh-release.jks jks.b64 0x40000001 && type jks.b64 | clip && del jks.b64
+```
+На Linux: `base64 -w0 vysh-release.jks | wl-copy` (или `xclip -sel c`).
+
+### Локальная сборка APK
+
+`android/key.properties` (в .gitignore):
+```properties
+storePassword=...
+keyPassword=...
+keyAlias=vysh
+storeFile=C:/Users/<вы>/keys/vysh-release.jks
+```
+Без этого файла `flutter build apk --release` подписывает debug-ключом: для проверки годится, для раздачи нет.
+
+```sh
+./tools/build_local.sh apk          # APK по архитектурам, с датой сборки
+./tools/build_local.sh apk-universal
+```
+
+### Дата сборки
+
+В «О программе» показывается `build N · дата`, если при сборке передан `BUILD_DATE`. CI передаёт его сам, локально это делает `tools/build_local.sh`, вручную так:
+```sh
+flutter build apk --release --dart-define="BUILD_DATE=$(date '+%d.%m.%y %H:%M:%S')"
+```
 
 ## Если что-то пошло не так
 

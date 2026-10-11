@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/models/app_strings.dart';
 import '../../domain/models/host.dart';
 import '../../domain/services/hosts_controller.dart';
 import '../../domain/services/settings_controller.dart';
 import '../../domain/services/tabs_controller.dart';
+import '../../infra/platform/desktop_env.dart';
 import '../shell/ui_state.dart';
 import '../widgets/context_menu.dart';
 import 'host_card.dart';
@@ -77,8 +79,14 @@ class _HostsPageState extends ConsumerState<HostsPage> {
           title: Text('Открыть ${hosts.length} вкладок?'),
           content: const Text('Каждый хост откроется в отдельной вкладке.'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Подключиться')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Подключиться'),
+            ),
           ],
         ),
       );
@@ -103,7 +111,10 @@ class _HostsPageState extends ConsumerState<HostsPage> {
           'Сохранённые пароли этих хостов тоже будут удалены.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: scheme.error,
@@ -120,7 +131,13 @@ class _HostsPageState extends ConsumerState<HostsPage> {
     _clearSelection();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(hosts.length == 1 ? 'Хост удалён' : 'Удалено хостов: ${hosts.length}')),
+        SnackBar(
+          content: Text(
+            hosts.length == 1
+                ? 'Хост удалён'
+                : 'Удалено хостов: ${hosts.length}',
+          ),
+        ),
       );
     }
   }
@@ -128,14 +145,9 @@ class _HostsPageState extends ConsumerState<HostsPage> {
   @override
   void initState() {
     super.initState();
-    // Пингуем только пока список виден: в терминале и при свёрнутом окне
-    // незачем стучаться во все серверы (можно включить в настройках).
-    // Интервал задаётся в настройках, поэтому таймер тикает часто (дёшево),
-    // а сама проверка - только когда подошло время.
     _pingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (_visible) _pingIfStale();
     });
-    // Развернули окно - обновим, если данные устарели.
     _life = AppLifecycleListener(onShow: () {
       if (_visible) _pingIfStale();
     });
@@ -168,9 +180,13 @@ class _HostsPageState extends ConsumerState<HostsPage> {
   @override
   Widget build(BuildContext context) {
     final hosts = ref.watch(hostsProvider);
+    final lang = ref.watch(settingsProvider.select((s) => s.language));
+    final strings = AppStrings.of(context, lang);
+
     ref.listen(tabsProvider.select((t) => t.isHome), (_, home) {
       if (home) _pingIfStale();
     });
+
     final filtered = hosts.where(_matches).toList();
     final quick = filtered.isEmpty ? Host.tryParseQuick(_query) : null;
 
@@ -192,6 +208,8 @@ class _HostsPageState extends ConsumerState<HostsPage> {
     final selectedHosts = hosts.where((h) => _selected.contains(h.id)).toList();
     final selecting = selectedHosts.isNotEmpty;
 
+    final isCompact = MediaQuery.sizeOf(context).width < 600 || DesktopEnv.isMobile;
+
     return CallbackShortcuts(
       bindings: {
         if (selecting)
@@ -202,136 +220,156 @@ class _HostsPageState extends ConsumerState<HostsPage> {
       child: Focus(
         focusNode: _keysFocus,
         child: Padding(
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: selecting
-                ? _SelectionBar(
-                    key: const ValueKey('sel'),
-                    count: selectedHosts.length,
-                    allSelected: filtered.every((h) => _selected.contains(h.id)),
-                    onSelectAll: () => setState(() => _selected.addAll(filtered.map((h) => h.id))),
-                    onClear: _clearSelection,
-                    onConnect: () => _connectMany(selectedHosts),
-                    onDelete: () => _deleteMany(selectedHosts),
-                  )
-                : KeyedSubtree(
-                    key: const ValueKey('search'),
-                    child: Row(
+          padding: EdgeInsets.fromLTRB(
+            isCompact ? 16 : 28,
+            isCompact ? 12 : 20,
+            isCompact ? 16 : 28,
+            0,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Expanded + Align, а не Flexible + Spacer: иначе на широком окне
-              // они делят место пополам и кнопка уезжает от края.
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 360),
-                  child: SearchBar(
-                    controller: _search,
-                    focusNode: ref.watch(hostSearchFocusProvider),
-                    hintText: 'Поиск или user@host:port',
-                    elevation: const WidgetStatePropertyAll(0),
-                    constraints: const BoxConstraints(minHeight: 44),
-                    leading: const Icon(Icons.search),
-                    trailing: [
-                      if (_query.isNotEmpty)
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () {
-                            _search.clear();
-                            setState(() => _query = '');
-                          },
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: selecting
+                    ? _SelectionBar(
+                        key: const ValueKey('sel'),
+                        count: selectedHosts.length,
+                        allSelected: filtered.every((h) => _selected.contains(h.id)),
+                        onSelectAll: () => setState(() => _selected.addAll(filtered.map((h) => h.id))),
+                        onClear: _clearSelection,
+                        onConnect: () => _connectMany(selectedHosts),
+                        onDelete: () => _deleteMany(selectedHosts),
+                      )
+                    : KeyedSubtree(
+                        key: const ValueKey('search'),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: isCompact ? double.infinity : 360,
+                                  ),
+                                  child: SearchBar(
+                                    controller: _search,
+                                    focusNode: ref.watch(hostSearchFocusProvider),
+                                    hintText: isCompact
+                                        ? strings.searchHostsHintMobile
+                                        : strings.searchHostsHintDesktop,
+                                    elevation: const WidgetStatePropertyAll(0),
+                                    constraints: const BoxConstraints(minHeight: 44),
+                                    leading: const Icon(Icons.search),
+                                    trailing: [
+                                      if (_query.isNotEmpty)
+                                        IconButton(
+                                          icon: const Icon(Icons.close),
+                                          onPressed: () {
+                                            _search.clear();
+                                            setState(() => _query = '');
+                                          },
+                                        ),
+                                    ],
+                                    onChanged: (v) => setState(() => _query = v.trim()),
+                                    onSubmitted: (_) {
+                                      if (filtered.length == 1) {
+                                        ref.read(tabsProvider.notifier).openHost(filtered.first);
+                                      } else if (quick != null) {
+                                        _connectQuick(quick);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: isCompact ? 10 : 12),
+                            if (isCompact)
+                              IconButton.filled(
+                                onPressed: () => showHostEditor(context),
+                                tooltip: strings.newHost,
+                                icon: const Icon(Icons.add),
+                              )
+                            else
+                              FilledButton.icon(
+                                onPressed: () => showHostEditor(context),
+                                icon: const Icon(Icons.add),
+                                label: Text(strings.newHost),
+                              ),
+                          ],
                         ),
-                    ],
-                    onChanged: (v) => setState(() => _query = v.trim()),
-                    onSubmitted: (_) {
-                      if (filtered.length == 1) {
-                        ref.read(tabsProvider.notifier).openHost(filtered.first);
-                      } else if (quick != null) {
-                        _connectQuick(quick);
-                      }
-                    },
-                  ),
-                  ),
-                ),
+                      ),
               ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: () => showHostEditor(context),
-                icon: const Icon(Icons.add),
-                label: const Text('Новый хост'),
+              SizedBox(height: isCompact ? 14 : 20),
+              Expanded(
+                child: hosts.isEmpty
+                    ? _EmptyState(strings: strings, onAdd: () => showHostEditor(context))
+                    : filtered.isEmpty
+                        ? _NoResults(
+                            query: _query,
+                            quick: quick,
+                            strings: strings,
+                            onQuick: _connectQuick,
+                          )
+                        : CustomScrollView(
+                            slivers: [
+                              for (final g in groupNames) ...[
+                                if (groupNames.length > 1 || g.isNotEmpty)
+                                  SliverToBoxAdapter(
+                                    child: _GroupHeader(
+                                      name: g.isEmpty ? strings.noGroup : g,
+                                      hosts: groups[g]!,
+                                      selected: _selected,
+                                      onConnectAll: () => _connectMany(groups[g]!),
+                                      onSelectAll: () => setState(() {
+                                        final ids = groups[g]!.map((h) => h.id);
+                                        if (groups[g]!.every((h) => _selected.contains(h.id))) {
+                                          _selected.removeAll(ids);
+                                        } else {
+                                          _selected.addAll(ids);
+                                        }
+                                        if (_selected.isNotEmpty) _keysFocus.requestFocus();
+                                      }),
+                                      onDeleteAll: () => _deleteMany(groups[g]!),
+                                    ),
+                                  ),
+                                SliverGrid(
+                                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: isCompact ? 600 : 380,
+                                    mainAxisExtent: 84,
+                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 10,
+                                  ),
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, i) {
+                                      final h = groups[g]![i];
+                                      return HostCard(
+                                        host: h,
+                                        selected: _selected.contains(h.id),
+                                        selecting: selecting,
+                                        onToggleSelect: () => _toggle(h.id),
+                                      );
+                                    },
+                                    childCount: groups[g]!.length,
+                                  ),
+                                ),
+                                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                              ],
+                            ],
+                          ),
               ),
             ],
           ),
-                  ),
-          ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: hosts.isEmpty
-                ? _EmptyState(onAdd: () => showHostEditor(context))
-                : filtered.isEmpty
-                    ? _NoResults(query: _query, quick: quick, onQuick: _connectQuick)
-                    : CustomScrollView(
-                        slivers: [
-                          for (final g in groupNames) ...[
-                            if (groupNames.length > 1 || g.isNotEmpty)
-                              SliverToBoxAdapter(
-                                child: _GroupHeader(
-                                  name: g.isEmpty ? 'Без группы' : g,
-                                  hosts: groups[g]!,
-                                  selected: _selected,
-                                  onConnectAll: () => _connectMany(groups[g]!),
-                                  onSelectAll: () => setState(() {
-                                    final ids = groups[g]!.map((h) => h.id);
-                                    if (groups[g]!.every((h) => _selected.contains(h.id))) {
-                                      _selected.removeAll(ids);
-                                    } else {
-                                      _selected.addAll(ids);
-                                    }
-                                    if (_selected.isNotEmpty) _keysFocus.requestFocus();
-                                  }),
-                                  onDeleteAll: () => _deleteMany(groups[g]!),
-                                ),
-                              ),
-                            SliverGrid(
-                              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 360,
-                                mainAxisExtent: 84,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                              ),
-                              delegate: SliverChildBuilderDelegate(
-                                (context, i) {
-                                  final h = groups[g]![i];
-                                  return HostCard(
-                                    host: h,
-                                    selected: _selected.contains(h.id),
-                                    selecting: selecting,
-                                    onToggleSelect: () => _toggle(h.id),
-                                  );
-                                },
-                                childCount: groups[g]!.length,
-                              ),
-                            ),
-                            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                          ],
-                        ],
-                      ),
-          ),
-        ],
-      ),
-      ),
+        ),
       ),
     );
   }
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onAdd});
+  const _EmptyState({required this.strings, required this.onAdd});
 
+  final AppStrings strings;
   final VoidCallback onAdd;
 
   @override
@@ -348,23 +386,29 @@ class _EmptyState extends StatelessWidget {
               color: theme.colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(28),
             ),
-            child: Icon(Icons.dns_rounded, size: 44,
-                color: theme.colorScheme.onPrimaryContainer),
+            child: Icon(
+              Icons.dns_rounded,
+              size: 44,
+              color: theme.colorScheme.onPrimaryContainer,
+            ),
           ),
           const SizedBox(height: 20),
-          Text('Пока нет ни одного хоста', style: theme.textTheme.titleLarge),
+          Text(strings.noHostsTitle, style: theme.textTheme.titleLarge),
           const SizedBox(height: 8),
-          Text(
-            'Добавьте хост или введите user@host в поиске',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              strings.noHostsDesc,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
           ),
           const SizedBox(height: 20),
           FilledButton.tonalIcon(
             onPressed: onAdd,
             icon: const Icon(Icons.add),
-            label: const Text('Добавить хост'),
+            label: Text(strings.newHost),
           ),
         ],
       ),
@@ -373,10 +417,16 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _NoResults extends StatelessWidget {
-  const _NoResults({required this.query, required this.quick, required this.onQuick});
+  const _NoResults({
+    required this.query,
+    required this.quick,
+    required this.strings,
+    required this.onQuick,
+  });
 
   final String query;
   final Host? quick;
+  final AppStrings strings;
   final ValueChanged<Host> onQuick;
 
   @override
@@ -389,20 +439,32 @@ class _NoResults extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Ничего не найдено по «$query»',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            Text(
+              strings.isRu
+                  ? 'Ничего не найдено по «$query»'
+                  : 'No results for "$query"',
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
             if (quick != null) ...[
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: () => onQuick(quick!),
                 icon: const Icon(Icons.bolt),
-                label: Text('Подключиться к ${quick!.displayAddress}'),
+                label: Text(
+                  strings.isRu
+                      ? 'Подключиться к ${quick!.displayAddress}'
+                      : 'Connect to ${quick!.displayAddress}',
+                ),
               ),
               const SizedBox(height: 6),
-              Text('Enter: подключиться без сохранения',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline)),
+              Text(
+                strings.isRu
+                    ? 'Enter - подключиться без сохранения'
+                    : 'Enter to connect without saving',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.outline),
+              ),
             ],
           ],
         ),
@@ -452,8 +514,11 @@ class _GroupHeader extends StatelessWidget {
               color: scheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text('${hosts.length}',
-                style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+            child: Text(
+              '${hosts.length}',
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+            ),
           ),
           const SizedBox(width: 4),
           IconButton(
@@ -474,15 +539,24 @@ class _GroupHeader extends StatelessWidget {
             tooltip: 'Действия с группой',
             items: [
               menuItem(
-                hosts.length == 1 ? 'Подключиться' : 'Подключиться ко всем (${hosts.length})',
+                hosts.length == 1
+                    ? 'Подключиться'
+                    : 'Подключиться ко всем (${hosts.length})',
                 icon: Icons.play_arrow_rounded,
                 onPressed: onConnectAll,
               ),
-              menuItem(all ? 'Снять выбор' : 'Выбрать все в группе',
-                  icon: Icons.check_box_outlined, onPressed: onSelectAll),
+              menuItem(
+                all ? 'Снять выбор' : 'Выбрать все в группе',
+                icon: Icons.check_box_outlined,
+                onPressed: onSelectAll,
+              ),
               menuDivider(),
-              menuItem('Удалить группу…',
-                  icon: Icons.delete_outline, color: scheme.error, onPressed: onDeleteAll),
+              menuItem(
+                'Удалить группу…',
+                icon: Icons.delete_outline,
+                color: scheme.error,
+                onPressed: onDeleteAll,
+              ),
             ],
           ),
         ],
@@ -533,15 +607,20 @@ class _SelectionBar extends StatelessWidget {
             child: Row(
               children: [
                 Flexible(
-                  child: Text('Выбрано: $count',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(color: scheme.onSecondaryContainer)),
+                  child: Text(
+                    'Выбрано: $count',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(color: scheme.onSecondaryContainer),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 if (!allSelected)
-                  TextButton(onPressed: onSelectAll, child: const Text('Выбрать все')),
+                  TextButton(
+                    onPressed: onSelectAll,
+                    child: const Text('Выбрать все'),
+                  ),
               ],
             ),
           ),

@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/app_settings.dart';
+import '../../domain/models/app_strings.dart';
 import '../../domain/models/external_colors.dart';
 import '../../domain/services/external_colors_controller.dart';
 import '../../domain/services/settings_controller.dart';
@@ -43,9 +45,9 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
     final ctrl = ref.read(settingsProvider.notifier);
     final ext = ref.watch(externalColorsProvider);
     final notFound = ref.read(externalColorsProvider.notifier).notFound;
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final error = theme.textTheme.bodySmall?.copyWith(color: scheme.error);
+    final strings = AppStrings.of(context, s.language);
+    final scheme = Theme.of(context).colorScheme;
+    final error = TextStyle(color: scheme.error, fontSize: 13);
 
     final details = switch (s.colorSource) {
       ColorSource.preset => Wrap(
@@ -63,24 +65,33 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
         ),
       ColorSource.system => ext == null && notFound
           ? Text(
-              Platform.isWindows
-                  ? 'Акцент Windows не найден'
-                  : 'Акцент не найден: нужен xdg-desktop-portal с accent-color',
-              style: error)
+              !kIsWeb && Platform.isWindows
+                  ? (strings.isRu ? 'Акцент Windows не найден' : 'Windows accent not found')
+                  : (strings.isRu
+                      ? 'Акцент не найден: нужен xdg-desktop-portal с accent-color'
+                      : 'Accent not found: requires xdg-desktop-portal with accent-color'),
+              style: error,
+            )
           : const SizedBox.shrink(),
       ColorSource.dots => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (ext != null && ext.path != null)
-              Text('${ext.source}: ${ext.path}', style: monoStyle(context, size: 12, color: scheme.onSurfaceVariant))
+              Text(
+                '${ext.source}: ${ext.path}',
+                style: monoStyle(context, size: 12, color: scheme.onSurfaceVariant),
+              )
             else if (notFound)
-              Text('Файл цветов не найден', style: error),
+              Text(
+                strings.isRu ? 'Файл цветов не найден' : 'Color file not found',
+                style: error,
+              ),
             const SizedBox(height: 10),
             TextField(
               controller: _path,
               style: monoStyle(context, size: 13),
               decoration: InputDecoration(
-                labelText: 'Свой путь к файлу',
+                labelText: strings.isRu ? 'Свой путь к файлу' : 'Custom file path',
                 hintText: '~/.config/vysh/colors.json',
                 filled: true,
                 border: OutlineInputBorder(
@@ -88,7 +99,7 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
                   borderSide: BorderSide.none,
                 ),
                 suffixIcon: IconButton(
-                  tooltip: 'Применить',
+                  tooltip: strings.isRu ? 'Применить' : 'Apply',
                   icon: const Icon(Icons.check),
                   onPressed: () => ctrl.setDotsPath(_path.text.trim()),
                 ),
@@ -111,7 +122,7 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SettingRow(
-          label: 'Цвета',
+          label: strings.colorSourceTitle,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
             child: Column(
@@ -119,19 +130,27 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
               children: [
                 SegmentedButton<ColorSource>(
                   segments: [
-                    const ButtonSegment(
-                        value: ColorSource.preset,
-                        icon: Icon(Icons.palette_outlined),
-                        label: Text('Свои')),
                     ButtonSegment(
+                      value: ColorSource.preset,
+                      icon: const Icon(Icons.palette_outlined),
+                      label: Text(strings.colorSourcePreset),
+                    ),
+                    if (!kIsWeb && (Platform.isWindows || Platform.isLinux))
+                      ButtonSegment(
                         value: ColorSource.system,
                         icon: const Icon(Icons.computer),
-                        label: Text(Platform.isWindows ? 'Акцент Windows' : 'Акцент системы')),
-                    if (Platform.isLinux)
-                      const ButtonSegment(
-                          value: ColorSource.dots,
-                          icon: Icon(Icons.wallpaper),
-                          label: Text('Из дотов')),
+                        label: Text(
+                          !kIsWeb && Platform.isWindows
+                              ? strings.colorSourceSystemWin
+                              : strings.colorSourceSystemSys,
+                        ),
+                      ),
+                    if (!kIsWeb && Platform.isLinux)
+                      ButtonSegment(
+                        value: ColorSource.dots,
+                        icon: const Icon(Icons.wallpaper),
+                        label: Text(strings.colorSourceDots),
+                      ),
                   ],
                   selected: {s.colorSource},
                   onSelectionChanged: (v) => ctrl.setColorSource(v.first),
@@ -150,12 +169,17 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
             ),
           ),
         ),
-        if (s.colorSource != ColorSource.preset)
+        if (s.colorSource != ColorSource.preset && !DesktopEnv.isMobile)
           SettingRow(
-            label: 'Проверка цветов',
+            label: strings.isRu ? 'Проверка цветов' : 'Color polling',
             child: SettingChoice<int>(
               value: s.colorPollSec,
-              options: const [(0, 'Выкл.'), (10, '10 с'), (60, '1 мин'), (300, '5 мин')],
+              options: [
+                (0, strings.isRu ? 'Выкл.' : 'Off'),
+                (10, strings.isRu ? '10 с' : '10s'),
+                (60, strings.isRu ? '1 мин' : '1 min'),
+                (300, strings.isRu ? '5 мин' : '5 min'),
+              ],
               onChanged: ctrl.setColorPollSec,
             ),
           ),
@@ -208,18 +232,27 @@ class TitleBarSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (DesktopEnv.isMobile) return const SizedBox.shrink();
     final s = ref.watch(settingsProvider);
     final ctrl = ref.read(settingsProvider.notifier);
+    final strings = AppStrings.of(context, s.language);
     // «Авто» в интерфейсе не показываем: пока пользователь не выбрал сам,
     // отмечен тот вариант, который сейчас действует.
     final custom = DesktopEnv.useCustomTitleBar(s.titleBarMode);
-
     return SettingRow(
-      label: 'Заголовок окна',
+      label: strings.titleBarTitle,
       child: SegmentedButton<bool>(
-        segments: const [
-          ButtonSegment(value: true, icon: Icon(Icons.tab_outlined), label: Text('Свой с вкладками')),
-          ButtonSegment(value: false, icon: Icon(Icons.web_asset), label: Text('Системный')),
+        segments: [
+          ButtonSegment(
+            value: true,
+            icon: const Icon(Icons.tab_outlined),
+            label: Text(strings.titleBarCustom),
+          ),
+          ButtonSegment(
+            value: false,
+            icon: const Icon(Icons.web_asset),
+            label: Text(strings.titleBarSystem),
+          ),
         ],
         selected: {custom},
         onSelectionChanged: (v) =>
@@ -249,7 +282,6 @@ class _SeedSwatch extends StatelessWidget {
       brightness: Theme.of(context).brightness,
     );
     final outline = Theme.of(context).colorScheme.onSurface;
-
     return Tooltip(
       message: name,
       child: InkWell(
@@ -288,4 +320,3 @@ class _SeedSwatch extends StatelessWidget {
     );
   }
 }
-

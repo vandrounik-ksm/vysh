@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/models/external_colors.dart';
+import '../../infra/platform/desktop_env.dart';
 
 /// Предустановленные акцентные цвета (seed для Material You).
 const seedPresets = <(String, int)>[
@@ -68,7 +69,9 @@ ThemeData buildTheme({
       textStyle: TextStyle(color: scheme.onInverseSurface, fontSize: 12),
     ),
     // Уведомление компактное и по центру, а не полоса на всю ширину окна.
-    snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating, width: 420),
+    // На телефоне ширина экрана меньше 420 - там обычная плашка.
+    snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating, width: DesktopEnv.isMobile ? null : 420),
     // Меню M3 (Expressive): скруглённый контейнер с внутренним отступом,
     // пункты - «пилюли» с тональной подсветкой при наведении.
     menuTheme: MenuThemeData(

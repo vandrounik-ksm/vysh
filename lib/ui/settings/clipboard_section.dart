@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/app_settings.dart';
+import '../../domain/models/app_strings.dart';
 import '../../domain/services/settings_controller.dart';
+import '../../infra/platform/desktop_env.dart';
 import 'setting_row.dart';
 
 /// Буфер обмена в терминале: стиль (две карточки) и пара переключателей.
@@ -13,8 +15,19 @@ class ClipboardSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(settingsProvider);
     final ctrl = ref.read(settingsProvider.notifier);
+    final ru = AppStrings.of(context, s.language).isRu;
     final linux = s.copyOnSelect;
     final rmbPaste = s.rightClick != RightClickAction.menu;
+
+    final confirm = SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(ru ? 'Спрашивать перед вставкой нескольких строк' : 'Confirm multi-line paste'),
+      value: s.confirmMultilinePaste,
+      onChanged: ctrl.setConfirmMultilinePaste,
+    );
+
+    // На телефоне мыши нет: копирование и вставка идут через меню выделения.
+    if (DesktopEnv.isMobile) return confirm;
 
     // Галочка «правый клик» внутри карточки относится к её стилю.
     // Клик по галочке в невыбранной карточке заодно выбирает её.
@@ -27,24 +40,28 @@ class ClipboardSection extends ConsumerWidget {
       _StyleCard(
         selected: linux,
         icon: Icons.mouse_outlined,
-        title: 'Как в Linux',
-        copyKeys: const ['Выделение'],
-        pasteKeys: ['Средняя кнопка', if (linux && rmbPaste) 'ПКМ'],
-        rmbLabel: 'ПКМ тоже вставляет',
+        title: ru ? 'Как в Linux' : 'Linux style',
+        copyKeys: [ru ? 'Выделение' : 'Selection'],
+        pasteKeys: [ru ? 'Средняя кнопка' : 'Middle click', if (linux && rmbPaste) ru ? 'ПКМ' : 'RMB'],
+        rmbLabel: ru ? 'ПКМ тоже вставляет' : 'Right click pastes too',
         rmbValue: linux && rmbPaste,
         onRmb: (v) => setRmb(true, v),
         onTap: () => ctrl.setLinuxClipboard(true),
+        copyTooltip: AppStrings.of(context, s.language).copy,
+        pasteTooltip: AppStrings.of(context, s.language).paste,
       ),
       _StyleCard(
         selected: !linux,
         icon: Icons.keyboard_outlined,
-        title: 'Клавишами',
-        copyKeys: ['Ctrl', 'Shift', 'C', if (!linux && rmbPaste) 'ПКМ'],
-        pasteKeys: ['Ctrl', 'Shift', 'V', if (!linux && rmbPaste) 'ПКМ'],
-        rmbLabel: 'ПКМ копирует и вставляет',
+        title: ru ? 'Клавишами' : 'Keyboard',
+        copyKeys: ['Ctrl', 'Shift', 'C', if (!linux && rmbPaste) ru ? 'ПКМ' : 'RMB'],
+        pasteKeys: ['Ctrl', 'Shift', 'V', if (!linux && rmbPaste) ru ? 'ПКМ' : 'RMB'],
+        rmbLabel: ru ? 'ПКМ копирует и вставляет' : 'Right click copies and pastes',
         rmbValue: !linux && rmbPaste,
         onRmb: (v) => setRmb(false, v),
         onTap: () => ctrl.setLinuxClipboard(false),
+        copyTooltip: AppStrings.of(context, s.language).copy,
+        pasteTooltip: AppStrings.of(context, s.language).paste,
       ),
     ];
 
@@ -52,7 +69,7 @@ class ClipboardSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SettingRow(
-          label: 'Буфер обмена',
+          label: ru ? 'Буфер обмена' : 'Clipboard',
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: LayoutBuilder(
@@ -73,16 +90,11 @@ class ClipboardSection extends ConsumerWidget {
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Ctrl+V тоже вставляет'),
+          title: Text(ru ? 'Ctrl+V тоже вставляет' : 'Ctrl+V pastes too'),
           value: s.ctrlVPaste,
           onChanged: ctrl.setCtrlVPaste,
         ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Спрашивать перед вставкой нескольких строк'),
-          value: s.confirmMultilinePaste,
-          onChanged: ctrl.setConfirmMultilinePaste,
-        ),
+        confirm,
       ],
     );
   }
@@ -99,8 +111,12 @@ class _StyleCard extends StatelessWidget {
     required this.rmbValue,
     required this.onRmb,
     required this.onTap,
+    required this.copyTooltip,
+    required this.pasteTooltip,
   });
 
+  final String copyTooltip;
+  final String pasteTooltip;
   final bool selected;
   final IconData icon;
   final String title;
@@ -149,9 +165,9 @@ class _StyleCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
-              _KeyRow(icon: Icons.content_copy, tooltip: 'Копировать', keys: copyKeys, muted: muted),
+              _KeyRow(icon: Icons.content_copy, tooltip: copyTooltip, keys: copyKeys, muted: muted),
               const SizedBox(height: 6),
-              _KeyRow(icon: Icons.content_paste, tooltip: 'Вставить', keys: pasteKeys, muted: muted),
+              _KeyRow(icon: Icons.content_paste, tooltip: pasteTooltip, keys: pasteKeys, muted: muted),
               const SizedBox(height: 4),
               InkWell(
                 borderRadius: BorderRadius.circular(10),

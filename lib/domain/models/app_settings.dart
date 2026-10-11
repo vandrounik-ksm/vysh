@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../infra/platform/desktop_env.dart';
+
 /// Что делает правый клик (и тап двумя пальцами по тачпаду) в терминале.
 enum RightClickAction {
   /// Контекстное меню.
@@ -50,12 +52,25 @@ enum TitleBarMode {
   custom,
 }
 
+/// Язык интерфейса приложения.
+enum AppLanguage {
+  /// Автоматически по языку системы Android / ОС.
+  auto,
+
+  /// Русский язык.
+  ru,
+
+  /// English.
+  en,
+}
+
 class AppSettings {
   const AppSettings({
     this.themeMode = ThemeMode.system,
     this.seedColor = 0xFF6750A4,
     this.compact = false,
     this.terminalFontSize = 14,
+    this.rememberTerminalFontSize = true,
     this.copyOnSelect = false,
     this.downloadsDir = '',
     this.pingHosts = true,
@@ -66,6 +81,10 @@ class AppSettings {
     this.colorSource = ColorSource.preset,
     this.dotsPath = '',
     this.titleBarMode = TitleBarMode.auto,
+    this.keepAliveSeconds = 60,
+    this.appIcon = 'monet',
+    this.showAccessoryBar = true,
+    this.language = AppLanguage.auto,
     this.scrollbackLines = 10000,
     this.pingIntervalSec = 30,
     this.pingOnlyVisible = true,
@@ -78,15 +97,26 @@ class AppSettings {
   final int seedColor;
   final bool compact;
   final double terminalFontSize;
+  final bool rememberTerminalFontSize;
   final bool copyOnSelect;
 
-  /// Папка для скачанных файлов; пусто - системная «Загрузки».
-  final String downloadsDir;
+  /// Иконка приложения (системная Monet-иконка на Android).
+  final String appIcon;
+
+  /// Показывать строку горячих клавиш терминала (Ctrl, Esc, стрелки) над клавиатурой.
+  final bool showAccessoryBar;
 
   /// Проверять доступность хостов на главной (TCP к порту SSH раз в 30 с).
   final bool pingHosts;
 
+  /// Интервал KeepAlive пакетов в SSH-сессиях в секундах (0 - выключен, 15, 30, 60, 120, 300).
+  /// По умолчанию 60 секунд (1 минута).
+  final int keepAliveSeconds;
+
   final RightClickAction rightClick;
+
+  /// Папка для скачанных файлов; пусто - системная «Загрузки».
+  final String downloadsDir;
 
   /// Вставка средней кнопкой мыши (как в Linux).
   final bool middleClickPaste;
@@ -103,6 +133,9 @@ class AppSettings {
   final String dotsPath;
 
   final TitleBarMode titleBarMode;
+
+  /// Язык интерфейса ('auto', 'ru', 'en').
+  final AppLanguage language;
 
   // ── Производительность ──
 
@@ -129,6 +162,7 @@ class AppSettings {
     int? seedColor,
     bool? compact,
     double? terminalFontSize,
+    bool? rememberTerminalFontSize,
     bool? copyOnSelect,
     String? downloadsDir,
     bool? pingHosts,
@@ -139,6 +173,10 @@ class AppSettings {
     ColorSource? colorSource,
     String? dotsPath,
     TitleBarMode? titleBarMode,
+    int? keepAliveSeconds,
+    String? appIcon,
+    bool? showAccessoryBar,
+    AppLanguage? language,
     int? scrollbackLines,
     int? pingIntervalSec,
     bool? pingOnlyVisible,
@@ -151,16 +189,23 @@ class AppSettings {
         seedColor: seedColor ?? this.seedColor,
         compact: compact ?? this.compact,
         terminalFontSize: terminalFontSize ?? this.terminalFontSize,
+        rememberTerminalFontSize:
+            rememberTerminalFontSize ?? this.rememberTerminalFontSize,
         copyOnSelect: copyOnSelect ?? this.copyOnSelect,
         downloadsDir: downloadsDir ?? this.downloadsDir,
         pingHosts: pingHosts ?? this.pingHosts,
         rightClick: rightClick ?? this.rightClick,
         middleClickPaste: middleClickPaste ?? this.middleClickPaste,
         ctrlVPaste: ctrlVPaste ?? this.ctrlVPaste,
-        confirmMultilinePaste: confirmMultilinePaste ?? this.confirmMultilinePaste,
+        confirmMultilinePaste:
+            confirmMultilinePaste ?? this.confirmMultilinePaste,
         colorSource: colorSource ?? this.colorSource,
         dotsPath: dotsPath ?? this.dotsPath,
         titleBarMode: titleBarMode ?? this.titleBarMode,
+        keepAliveSeconds: keepAliveSeconds ?? this.keepAliveSeconds,
+        appIcon: appIcon ?? this.appIcon,
+        showAccessoryBar: showAccessoryBar ?? this.showAccessoryBar,
+        language: language ?? this.language,
         scrollbackLines: scrollbackLines ?? this.scrollbackLines,
         pingIntervalSec: pingIntervalSec ?? this.pingIntervalSec,
         pingOnlyVisible: pingOnlyVisible ?? this.pingOnlyVisible,
@@ -174,6 +219,7 @@ class AppSettings {
         'seedColor': seedColor,
         'compact': compact,
         'terminalFontSize': terminalFontSize,
+        'rememberTerminalFontSize': rememberTerminalFontSize,
         'copyOnSelect': copyOnSelect,
         'downloadsDir': downloadsDir,
         'pingHosts': pingHosts,
@@ -184,6 +230,10 @@ class AppSettings {
         'colorSource': colorSource.name,
         'dotsPath': dotsPath,
         'titleBarMode': titleBarMode.name,
+        'keepAliveSeconds': keepAliveSeconds,
+        'appIcon': appIcon,
+        'showAccessoryBar': showAccessoryBar,
+        'language': DesktopEnv.isMobile ? 'auto' : language.name,
         'scrollbackLines': scrollbackLines,
         'pingIntervalSec': pingIntervalSec,
         'pingOnlyVisible': pingOnlyVisible,
@@ -200,8 +250,13 @@ class AppSettings {
         ),
         seedColor: (json['seedColor'] as num?)?.toInt() ?? 0xFF6750A4,
         compact: json['compact'] as bool? ?? false,
-        terminalFontSize:
-            ((json['terminalFontSize'] as num?)?.toDouble() ?? 14).clamp(8, 32).toDouble(),
+        terminalFontSize: (json['rememberTerminalFontSize'] as bool? ?? true)
+            ? ((json['terminalFontSize'] as num?)?.toDouble() ?? 14)
+                .clamp(8, 32)
+                .toDouble()
+            : 14,
+        rememberTerminalFontSize:
+            json['rememberTerminalFontSize'] as bool? ?? true,
         copyOnSelect: json['copyOnSelect'] as bool? ?? false,
         downloadsDir: json['downloadsDir'] as String? ?? '',
         pingHosts: json['pingHosts'] as bool? ?? true,
@@ -221,13 +276,29 @@ class AppSettings {
           (m) => m.name == json['titleBarMode'],
           orElse: () => TitleBarMode.auto,
         ),
-        scrollbackLines:
-            ((json['scrollbackLines'] as num?)?.toInt() ?? 10000).clamp(500, maxScrollback).toInt(),
-        pingIntervalSec: ((json['pingIntervalSec'] as num?)?.toInt() ?? 30).clamp(5, 3600).toInt(),
+        keepAliveSeconds: (json['keepAliveSeconds'] as num?)?.toInt() ?? 60,
+        appIcon: (json['appIcon'] as String?) ?? 'monet',
+        showAccessoryBar: json['showAccessoryBar'] as bool? ?? true,
+        language: DesktopEnv.isMobile
+            ? AppLanguage.auto
+            : AppLanguage.values.firstWhere(
+                (l) => l.name == json['language'],
+                orElse: () => AppLanguage.auto,
+              ),
+        scrollbackLines: ((json['scrollbackLines'] as num?)?.toInt() ?? 10000)
+            .clamp(500, maxScrollback)
+            .toInt(),
+        pingIntervalSec: ((json['pingIntervalSec'] as num?)?.toInt() ?? 30)
+            .clamp(5, 3600)
+            .toInt(),
         pingOnlyVisible: json['pingOnlyVisible'] as bool? ?? true,
-        colorPollSec: ((json['colorPollSec'] as num?)?.toInt() ?? 60).clamp(0, 3600).toInt(),
+        colorPollSec: ((json['colorPollSec'] as num?)?.toInt() ?? 60)
+            .clamp(0, 3600)
+            .toInt(),
         pauseHiddenTabs: json['pauseHiddenTabs'] as bool? ?? true,
-        renderer: json['renderer'] == 'impeller' ? Renderer.impeller : Renderer.skia,
+        renderer: json['renderer'] == 'impeller'
+            ? Renderer.impeller
+            : Renderer.skia,
       );
 
   /// Верхний предел истории: xterm2 сразу резервирует список на столько строк.

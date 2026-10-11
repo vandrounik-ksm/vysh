@@ -1,0 +1,27 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <!-- Cute Kaomoji Face '>_<' in exactly 512x512 from assets/icon.svg -->
+    <!-- Left Eye '>' -->
+    <path
+        android:pathData="M 145,206 L 205,256 L 145,306"
+        android:strokeColor="#463553"
+        android:strokeWidth="40"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Mouth '_' -->
+    <path
+        android:pathData="M 230,306 L 282,306"
+        android:strokeColor="#463553"
+        android:strokeWidth="40"
+        android:strokeLineCap="round" />
+    <!-- Right Eye '<' -->
+    <path
+        android:pathData="M 367,206 L 307,256 L 367,306"
+        android:strokeColor="#463553"
+        android:strokeWidth="40"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#CAB8E8</color>
+    <color name="ic_launcher_foreground_color">#463553</color>
+    <color name="ic_launcher_monet_background">#18181A</color>
+    <color name="ic_launcher_monet_foreground">#A8DAB5</color>
+</resources>
