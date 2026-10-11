@@ -1286,7 +1286,9 @@ class _SessionViewState extends ConsumerState<SessionView>
                   ],
                 ),
         ),
-        if (settings.showAccessoryBar && (!isCompact || !paneOpen))
+        if (DesktopEnv.isMobile &&
+            settings.showAccessoryBar &&
+            (!isCompact || !paneOpen))
           TerminalAccessoryBar(
             session: session,
             focusNode: _focus,

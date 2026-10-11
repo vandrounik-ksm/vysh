@@ -174,8 +174,7 @@ class AppStrings {
       ? 'Однострочная панель keyboard над клавиатурой на смартфонах.'
       : 'Single-row keyboard style toolbar above the mobile keyboard.';
   String get languageTitle => isRu ? 'Язык интерфейса' : 'Interface language';
-  String get languageAuto =>
-      isRu ? 'Авто (Android / система)' : 'Auto (System / OS)';
+  String get languageAuto => isRu ? 'Как в системе' : 'System';
   String get languageRu => isRu ? 'Русский (Russian)' : 'Russian (Русский)';
   String get languageEn => isRu ? 'English (Английский)' : 'English';
   String get rightClickMobileTitle =>
