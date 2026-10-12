@@ -20,6 +20,7 @@ import '../../infra/platform/desktop_env.dart';
 import '../sftp/sftp_pane.dart';
 import '../shell/ui_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/context_menu.dart';
 import '../widgets/modifiers.dart';
 import 'connection_failure_view.dart';
 import 'stable_selection.dart';
@@ -221,7 +222,9 @@ class _SessionViewState extends ConsumerState<SessionView>
         content: Text(message),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.only(bottom: 40, left: 20, right: 20),
+        margin: DesktopEnv.isMobile
+            ? const EdgeInsets.only(bottom: 40, left: 20, right: 20)
+            : null,
       ),
     );
   }
@@ -345,6 +348,9 @@ class _SessionViewState extends ConsumerState<SessionView>
     if (!mounted) {
       return;
     }
+
+    // На ПК вставку и так видно, уведомление только на телефоне.
+    if (!DesktopEnv.isMobile) return;
 
     final strings = SelectionStrings.of(
       context,
@@ -841,11 +847,63 @@ class _SessionViewState extends ConsumerState<SessionView>
     _focus.requestFocus();
   }
 
+  final _menu = GlobalKey<ContextMenuAreaState>();
+
+  /// Контекстное меню на ПК: обычное меню M3, а не телефонная плашка.
+  void _showDesktopMenu(Offset globalPosition) {
+    final ru = SelectionStrings.of(
+      context,
+      ref.read(settingsProvider).language,
+    ).isRussian;
+    final hasSelection = _controller.selection != null;
+    _menu.currentState?.open(globalPosition, [
+      menuItem(
+        ru ? 'Копировать' : 'Copy',
+        icon: Icons.content_copy,
+        shortcut: Keys.copy,
+        onPressed: hasSelection
+            ? () {
+                _copySelection();
+                _controller.clearSelection();
+              }
+            : null,
+      ),
+      menuItem(
+        ru ? 'Вставить' : 'Paste',
+        icon: Icons.content_paste,
+        shortcut: Keys.paste,
+        onPressed: _paste,
+      ),
+      menuDivider(),
+      menuItem(
+        ru ? 'Файлы (SFTP)' : 'Files (SFTP)',
+        icon: Icons.folder_outlined,
+        shortcut: Keys.files,
+        onPressed: () => ref.read(sftpPaneProvider.notifier).toggle(widget.tab.id),
+      ),
+      menuItem(
+        ru ? 'Журнал и диагностика' : 'Log and diagnostics',
+        icon: Icons.receipt_long_outlined,
+        onPressed: () => setState(() => _showLogManually = true),
+      ),
+      menuItem(
+        ru ? 'Переподключить' : 'Reconnect',
+        icon: Icons.refresh,
+        shortcut: Keys.reconnect,
+        onPressed: _reconnect,
+      ),
+    ]);
+  }
+
   void _onSecondaryClick(Offset position, [Offset? localPosition]) {
     final action = ref.read(settingsProvider).rightClick;
 
     if (Modifiers.instance.shift || action == RightClickAction.menu) {
-      _showselectionMenu(localPosition ?? position);
+      if (DesktopEnv.isDesktop) {
+        _showDesktopMenu(position);
+      } else {
+        _showselectionMenu(localPosition ?? position);
+      }
       return;
     }
 
@@ -1177,7 +1235,10 @@ class _SessionViewState extends ConsumerState<SessionView>
 
     final terminalArea = ColoredBox(
       color: terminalBackgroundFor(scheme, ext),
-      child: Stack(
+      child: ContextMenuArea(
+        key: _menu,
+        onClose: () => _focus.requestFocus(),
+        child: Stack(
         key: _terminalStackKey,
         children: [
           Positioned.fill(child: terminalView),
@@ -1227,12 +1288,15 @@ class _SessionViewState extends ConsumerState<SessionView>
               },
               onDismiss: _dismissselectionMenu,
             ),
-          if (_controller.selection != null &&
+          // Ручки выделения - для пальца; мышью выделяют и без них.
+          if (DesktopEnv.isMobile &&
+              _controller.selection != null &&
               !_controller.selection!.isCollapsed) ...[
             _selectionHandle(start: true),
             _selectionHandle(start: false),
           ],
         ],
+      ),
       ),
     );
 
