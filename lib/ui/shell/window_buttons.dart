@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../infra/platform/capabilities.dart';
 import '../../l10n/app_strings.dart';
 import '../widgets/strings_context.dart';
 
 /// Кнопки окна для своего заголовка: свернуть / развернуть / закрыть.
+/// На macOS окно управляется нативным светофором - своих кнопок не рисуем.
 class WindowButtons extends StatefulWidget {
   const WindowButtons({super.key, this.height = 46});
 
@@ -39,6 +41,8 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    // macOS: светофор рисует система слева, свои кнопки только продублировали бы его.
+    if (PlatformCapabilities.isMacOS) return const SizedBox.shrink();
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [

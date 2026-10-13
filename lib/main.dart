@@ -54,7 +54,8 @@ Future<void> main() async {
       title: 'vysh',
       minimumSize: WindowPlacement.minSize,
       titleBarStyle: custom ? TitleBarStyle.hidden : TitleBarStyle.normal,
-      windowButtonVisibility: !custom,
+      // macOS: светофор остаётся всегда, прячем только полосу заголовка.
+      windowButtonVisibility: !custom || Platform.isMacOS,
     );
     windowManager.waitUntilReadyToShow(options, () async {
       final maximize = await WindowPlacement.instance.restore();
