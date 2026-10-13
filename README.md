@@ -4,12 +4,13 @@
 
 # vysh
 
-**SSH-клиент и менеджер подключений для Windows, Linux и Android**
+**SSH-клиент и менеджер подключений для Windows, Linux, macOS и Android**
 
 ![Flutter](https://img.shields.io/badge/Flutter-02569B?logo=flutter&logoColor=white)
 ![Dart](https://img.shields.io/badge/Dart-0175C2?logo=dart&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&logoColor=black)
+![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)
 ![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=black)
 ![Material 3](https://img.shields.io/badge/Material-3-757575?logo=materialdesign&logoColor=white)
 ![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)
@@ -110,15 +111,24 @@ tar -xzf vysh-<версия>-linux-x64.tar.gz -C ~/.local/opt/vysh
 
 Новая версия устанавливается поверх предыдущей; хосты и пароли сохраняются.
 
+### macOS
+1. Скачайте `vysh-<версия>-macos.dmg` со страницы [релизов](../../releases/latest).
+2. Откройте образ и перетащите vysh в папку «Программы».
+
+> Gatekeeper может предупредить о неизвестном разработчике (сборка не подписана сертификатом Apple).
+> ПКМ (⌘+клик) по vysh → «Открыть» → «Открыть» в диалоге.
+
+Для хранения паролей используется Keychain.
+
 ### Обновление
 Для Windows и архива Linux удалите папку с предыдущей версией и распакуйте новую. Хосты, настройки и пароли хранятся отдельно от программы и не затрагиваются.
 
 ## Хранение данных
 
-| | Windows | Linux | Android |
-|---|---|---|---|
-| Хосты, настройки, `known_hosts.json` | `%APPDATA%\vysh` | `~/.config/vysh` | внутреннее хранилище приложения |
-| Пароли и парольные фразы | DPAPI (привязаны к учётной записи) | Secret Service (gnome-keyring, KWallet, KeePassXC) | Android Keystore |
+| | Windows | Linux | macOS | Android |
+|---|---|---|---|---|
+| Хосты, настройки, `known_hosts.json` | `%APPDATA%\vysh` | `~/.config/vysh` | `~/Library/Application Support/vysh` (в контейнере App Sandbox) | внутреннее хранилище приложения |
+| Пароли и парольные фразы | DPAPI (привязаны к учётной записи) | Secret Service (gnome-keyring, KWallet, KeePassXC) | Keychain | Android Keystore |
 
 Файлы хостов и настроек представляют собой обычный JSON без секретов: их можно хранить в git или синхронизировать, например, через Syncthing. Переменная окружения `VYSH_CONFIG_DIR` позволяет запустить vysh с отдельной папкой профиля. При каждом сохранении прежняя версия остаётся рядом в `.bak`.
 
@@ -138,6 +148,8 @@ tar -xzf vysh-<версия>-linux-x64.tar.gz -C ~/.local/opt/vysh
 
 Все сочетания включают `Shift`, чтобы не перехватывать у терминала `Ctrl+W`, `Ctrl+R` и другие.
 
+На macOS те же действия выполняются привычными ⌘-шорткатами: `⌘T`, `⌘W`, `⌘1…9`, `⌘N`, `⌘R`, `⌘E`, `⌘C` / `⌘V`, `⌘,`.
+
 ## Сборка из исходников
 
 Требуется [Flutter](https://docs.flutter.dev/get-started/install) (канал stable). Для Windows дополнительно нужна Visual Studio 2022 с компонентами «Desktop development with C++» и «C++ ATL».
@@ -145,7 +157,7 @@ tar -xzf vysh-<версия>-linux-x64.tar.gz -C ~/.local/opt/vysh
 ```sh
 git clone https://github.com/vyto4ka/vysh && cd vysh
 flutter pub get
-flutter run -d windows   # или: -d linux
+flutter run -d windows   # или: -d linux, -d macos
 ```
 
 Релизная сборка для Windows одним скриптом:
@@ -155,6 +167,11 @@ powershell -ExecutionPolicy Bypass -File tools\build-windows.ps1
 ```
 
 Для Linux дополнительно нужны пакеты `ninja-build libgtk-3-dev libsecret-1-dev`; сборка: `flutter build linux --release`.
+
+Для macOS нужен Xcode (command line tools достаточно для debug); релизная сборка с упаковкой в DMG:
+```sh
+./tools/build_dmg.sh    # результат: build/vysh-<версия>-macos.dmg
+```
 
 Для Android требуется Android SDK (устанавливается вместе с Android Studio):
 ```sh
@@ -187,6 +204,7 @@ flutter run -d <устройство>    # отладка
 - [x] Пакет для Arch Linux (PKGBUILD в релизах)
 - [x] Android
 - [x] Нагрузка сервера в строке состояния, темы Catppuccin
+- [x] macOS (нативный светофор, ⌘-шорткаты, Keychain, DMG в релизах)
 - [ ] AppImage, .deb, AUR, установщик для Windows, поддержка отечественных дистрибутивов
 - [ ] Сниппеты, проброс портов, jump host, разделение вкладки на панели
 - [ ] ssh-agent / Pageant, хранилище с мастер-паролем

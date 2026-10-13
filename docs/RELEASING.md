@@ -1,6 +1,6 @@
 # Как выпустить версию
 
-Релиз (Windows, Linux, PKGBUILD для Arch, APK) полностью собирает GitHub Actions: от вас - запись в CHANGELOG, версия и тег.
+Релиз (Windows, Linux, PKGBUILD для Arch, DMG для macOS, APK) полностью собирает GitHub Actions: от вас - запись в CHANGELOG, версия и тег.
 
 ## 1. CHANGELOG.md
 
@@ -124,6 +124,18 @@ storeFile=C:/Users/<вы>/keys/vysh-release.jks
 ```sh
 flutter build apk --release --dart-define="BUILD_DATE=$(date '+%d.%m.%y %H:%M:%S')"
 ```
+
+## macOS
+
+CI собирает `vysh-<тег>-macos.dmg` на `macos-latest` без каких-либо секретов: приложения Flutter подписываются ad-hoc, Gatekeeper при первом запуске спрашивает подтверждение (ПКМ → «Открыть»). Для бесшовного запуска и нотаризации нужен аккаунт Apple Developer и сертификат «Developer ID Application» - добавляется так же, как Android-секреты, когда понадобится.
+
+### Локальная сборка DMG
+
+```sh
+./tools/build_dmg.sh    # flutter build macos --release + hdiutil/create-dmg
+```
+
+Требуется Xcode (для сборки достаточно Command Line Tools: `xcode-select --install`). App Sandbox включён в entitlements: сетевой клиент, доступ к выбранным пользователем файлам и папке Загрузок; профиль лежит в `~/Library/Application Support/vysh` внутри контейнера приложения.
 
 ## Если что-то пошло не так
 
