@@ -12,6 +12,7 @@ coverage/
 # Платформенные временные файлы Flutter
 linux/flutter/ephemeral/
 windows/flutter/ephemeral/
+macos/Flutter/ephemeral/
 
 # Закреплённая версия Flutter через fvm (сам SDK не храним)
 .fvm/flutter_sdk
