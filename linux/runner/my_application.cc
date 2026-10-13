@@ -14,6 +14,61 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+// settings.json в папке профиля - тот же порядок, что у AppPaths в Dart:
+// VYSH_CONFIG_DIR, затем $XDG_CONFIG_HOME/vysh, затем ~/.config/vysh.
+static gchar* settings_path() {
+  const gchar* custom = g_getenv("VYSH_CONFIG_DIR");
+  if (custom != nullptr) {
+    g_autofree gchar* trimmed = g_strstrip(g_strdup(custom));
+    if (trimmed[0] != '\0') return g_build_filename(trimmed, "settings.json", nullptr);
+  }
+  const gchar* xdg = g_getenv("XDG_CONFIG_HOME");
+  if (xdg != nullptr && xdg[0] != '\0') {
+    return g_build_filename(xdg, "vysh", "settings.json", nullptr);
+  }
+  return g_build_filename(g_get_home_dir(), ".config", "vysh", "settings.json", nullptr);
+}
+
+// Строковое значение ключа верхнего уровня в JSON настроек. Файл пишет сам
+// vysh, так что хватает маленького сканера; содержимое строк пропускается,
+// поэтому имя ключа внутри чужого значения (например, пути) не сработает.
+static gchar* read_string_key(const gchar* text, const gchar* key) {
+  int depth = 0;
+  const gchar* p = text;
+  while (*p != '\0') {
+    if (*p == '{' || *p == '[') {
+      depth++;
+      p++;
+    } else if (*p == '}' || *p == ']') {
+      depth--;
+      p++;
+    } else if (*p == '"') {
+      GString* s = g_string_new(nullptr);
+      p++;
+      while (*p != '\0' && *p != '"') {
+        if (*p == '\\' && p[1] != '\0') p++;
+        g_string_append_c(s, *p);
+        p++;
+      }
+      if (*p == '"') p++;
+      const gchar* q = p;
+      while (g_ascii_isspace(*q)) q++;
+      const gboolean match = *q == ':' && depth == 1 && g_strcmp0(s->str, key) == 0;
+      g_string_free(s, TRUE);
+      if (!match) continue;
+      q++;
+      while (g_ascii_isspace(*q)) q++;
+      if (*q != '"') return nullptr;
+      q++;
+      const gchar* end = strchr(q, '"');
+      return end == nullptr ? nullptr : g_strndup(q, end - q);
+    } else {
+      p++;
+    }
+  }
+  return nullptr;
+}
+
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
@@ -72,21 +127,15 @@ static void my_application_activate(GApplication* application) {
   // он экономнее по памяти. Читаем до запуска движка, без Dart.
   {
     gboolean impeller = FALSE;
-    const gchar* xdg = g_getenv("XDG_CONFIG_HOME");
-    g_autofree gchar* path =
-        (xdg != nullptr && xdg[0] != '\0')
-            ? g_build_filename(xdg, "vysh", "settings.json", nullptr)
-            : g_build_filename(g_get_home_dir(), ".config", "vysh", "settings.json", nullptr);
     g_autofree gchar* text = nullptr;
+    g_autofree gchar* path = settings_path();
     if (g_file_get_contents(path, &text, nullptr, nullptr)) {
-      GString* compact = g_string_new(nullptr);
-      for (const gchar* c = text; *c != '\0'; c++) {
-        if (!g_ascii_isspace(*c)) g_string_append_c(compact, *c);
-      }
-      impeller = strstr(compact->str, "\"renderer\":\"impeller\"") != nullptr;
-      g_string_free(compact, TRUE);
+      g_autofree gchar* renderer = read_string_key(text, "renderer");
+      impeller = g_strcmp0(renderer, "impeller") == 0;
     }
     fl_dart_project_set_enable_impeller(project, impeller);
+    // Dart узнаёт, какой движок запущен на самом деле.
+    g_setenv("VYSH_RENDERER", impeller ? "impeller" : "skia", TRUE);
   }
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);

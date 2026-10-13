@@ -304,4 +304,9 @@ class AppStrings {
   String get itemDeleted => isRu ? 'Удалено' : 'Deleted';
   String get downloadStarted => isRu ? 'Скачивание начато' : 'Download started';
   String get uploadStarted => isRu ? 'Загрузка начата' : 'Upload started';
+
+  // Хранение данных
+  String saveFailed(String file, String error) => isRu
+      ? 'Не удалось сохранить $file: $error'
+      : 'Could not save $file: $error';
 }

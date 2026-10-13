@@ -7,6 +7,7 @@ abstract interface class SecretStore {
   /// Бросает исключение, если хранилище недоступно.
   Future<void> write(String key, String value);
 
+  /// Бросает исключение, если хранилище недоступно.
   Future<void> delete(String key);
 }
 

@@ -76,6 +76,43 @@ Future<bool> confirmDelete(BuildContext context, List<RemoteEntry> entries) asyn
   return ok ?? false;
 }
 
+/// Файлы с такими именами уже есть на сервере.
+/// true - заменить, false - пропустить их, null - отменить загрузку.
+Future<bool?> askOverwrite(BuildContext context, List<String> names) {
+  final what = names.length == 1 ? '«${names.first}»' : '${names.length} файлов';
+  final shown = names.take(8).join('\n') + (names.length > 8 ? '\n…' : '');
+  return showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      icon: const Icon(Icons.file_copy_outlined),
+      title: Text('Заменить $what?'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('На сервере уже есть файлы с такими именами:'),
+            const SizedBox(height: 8),
+            Text(shown, style: monoStyle(context, size: 12)),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Пропустить'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Заменить'),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Диалог прав доступа: галочки rwx + восьмеричное поле.
 Future<int?> askPermissions(BuildContext context, RemoteEntry e) {
   return showDialog<int>(
@@ -93,8 +130,12 @@ class _PermissionsDialog extends StatefulWidget {
 }
 
 class _PermissionsDialogState extends State<_PermissionsDialog> {
-  late int _mode = (widget.entry.mode ?? 0x1A4 /* 644 */) & 0x1FF;
-  late final _octal = TextEditingController(text: _mode.toRadixString(8).padLeft(3, '0'));
+  // 12 бит: rwx и специальные setuid/setgid/sticky - их не теряем.
+  late int _mode = (widget.entry.mode ?? 0x1A4 /* 644 */) & 0xFFF;
+  late final _octal = TextEditingController(text: _octalText(_mode));
+
+  static String _octalText(int mode) =>
+      mode.toRadixString(8).padLeft(mode > 0x1FF ? 4 : 3, '0');
 
   @override
   void dispose() {
@@ -105,7 +146,7 @@ class _PermissionsDialogState extends State<_PermissionsDialog> {
   void _setBit(int bit, bool on) {
     setState(() {
       _mode = on ? _mode | (1 << bit) : _mode & ~(1 << bit);
-      _octal.text = _mode.toRadixString(8).padLeft(3, '0');
+      _octal.text = _octalText(_mode);
     });
   }
 
@@ -142,6 +183,22 @@ class _PermissionsDialogState extends State<_PermissionsDialog> {
                   ]),
               ],
             ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final (bit, label) in const [
+                  (11, 'setuid'),
+                  (10, 'setgid'),
+                  (9, 'sticky'),
+                ])
+                  FilterChip(
+                    label: Text(label),
+                    selected: (_mode & (1 << bit)) != 0,
+                    onSelected: (v) => _setBit(bit, v),
+                  ),
+              ],
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: _octal,
@@ -153,7 +210,7 @@ class _PermissionsDialogState extends State<_PermissionsDialog> {
               ],
               onChanged: (v) {
                 final m = int.tryParse(v, radix: 8);
-                if (m != null) setState(() => _mode = m & 0x1FF);
+                if (m != null) setState(() => _mode = m & 0xFFF);
               },
             ),
           ],

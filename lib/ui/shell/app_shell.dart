@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../domain/models/app_strings.dart';
 import '../../domain/services/settings_controller.dart';
+import '../../infra/storage/json_store.dart';
 import '../../domain/services/tabs_controller.dart';
 import '../hosts/host_editor.dart';
 import '../hosts/hosts_page.dart';
@@ -35,12 +37,28 @@ class _AppShellState extends ConsumerState<AppShell> {
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_onKey);
+    JsonStore.failure.addListener(_onSaveFailure);
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKey);
+    JsonStore.failure.removeListener(_onSaveFailure);
     super.dispose();
+  }
+
+  /// Хосты/настройки не записались на диск - пользователь должен об этом знать.
+  void _onSaveFailure() {
+    final f = JsonStore.failure.value;
+    if (f == null || !mounted) return;
+    final strings = AppStrings.of(context, ref.read(settingsProvider).language);
+    final scheme = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(strings.saveFailed(f.fileName, f.message),
+          style: TextStyle(color: scheme.onErrorContainer)),
+      backgroundColor: scheme.errorContainer,
+      duration: const Duration(seconds: 8),
+    ));
   }
 
   bool _onKey(KeyEvent event) {

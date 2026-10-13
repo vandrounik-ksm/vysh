@@ -30,21 +30,96 @@ class LocalFiles {
 
   static const _filesChannel = MethodChannel('uwu.vyto4ka.vysh/local_files');
 
-  /// Публичная Download доступна без разрешений: файл качается во временную
-  /// папку и публикуется через MediaStore.Downloads (Android 10+).
-  /// Возвращает null, если файл опубликовать не удалось.
-  static Future<String?> saveToDownloads(String tempPath, String name,
-      {String? mimeType}) async {
-    if (kIsWeb) return null;
+  /// Публичная Download: файл качается во временную папку и публикуется
+  /// через MediaStore.Downloads (Android 10+) или копируется напрямую
+  /// (Android 9-, с запросом разрешения). [subDir] - путь внутри Download,
+  /// чтобы скачанная папка сохранила структуру.
+  /// Возвращает URI опубликованного файла; при неудаче бросает исключение.
+  static Future<String> saveToDownloads(String tempPath, String name,
+      {String subDir = '', String? mimeType}) async {
     try {
-      return await _filesChannel.invokeMethod<String>('saveToDownloads', {
+      final uri = await _filesChannel.invokeMethod<String>('saveToDownloads', {
         'tempPath': tempPath,
         'name': name,
+        'subDir': subDir,
         'mimeType': mimeType,
       });
-    } catch (_) {
-      return null;
+      if (uri == null) throw const FileSystemException('пустой ответ системы');
+      return uri;
+    } on PlatformException catch (e) {
+      throw FileSystemException('Не удалось сохранить в Download: ${e.message ?? e.code}');
     }
+  }
+
+  /// Отправить текст через системное меню «Поделиться» (Android).
+  /// false - платформа так не умеет или отправка не удалась.
+  static Future<bool> shareText(String text) async {
+    if (kIsWeb || !Platform.isAndroid) return false;
+    try {
+      return await _filesChannel.invokeMethod<bool>('shareText', {'text': text}) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ─── Безопасные локальные имена ─────────────────────────────────
+
+  static const _windowsReserved = {
+    'CON', 'PRN', 'AUX', 'NUL', //
+    'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+    'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+  };
+
+  /// Имя файла с сервера → имя, которое можно безопасно создать локально.
+  ///
+  /// Имя приходит от сервера и не должно выводить за выбранную папку:
+  /// на Linux `\` - обычный символ имени, а Windows считает его разделителем,
+  /// так что `..\x` указывало бы в родительскую папку. Убираем разделители
+  /// обеих систем, `.`/`..`, недопустимые в Windows символы (в том числе `:` -
+  /// альтернативные потоки NTFS), управляющие символы и имена устройств.
+  static String safeName(String remoteName) {
+    var name = remoteName.replaceAll(RegExp(r'[\x00-\x1f\x7f/\\]'), '_');
+    final windows = !kIsWeb && Platform.isWindows;
+    if (windows) {
+      name = name.replaceAll(RegExp(r'[<>:"|?*]'), '_');
+      // Windows молча отбрасывает точки и пробелы в конце имени.
+      name = name.replaceAll(RegExp(r'[. ]+$'), '');
+      final stem = name.split('.').first.trim().toUpperCase();
+      if (_windowsReserved.contains(stem)) name = '_$name';
+    }
+    if (name.isEmpty || name == '.' || name == '..') name = '_';
+    return name;
+  }
+
+  /// Лежит ли [path] внутри [root] (после нормализации `.`/`..`).
+  static bool isWithin(String root, String path) {
+    if (kIsWeb) return true;
+    String norm(String p) {
+      final abs = File(p).absolute.path;
+      final parts = <String>[];
+      for (final s in abs.split(RegExp(r'[\\/]'))) {
+        if (s.isEmpty || s == '.') continue;
+        if (s == '..') {
+          if (parts.isNotEmpty) parts.removeLast();
+        } else {
+          parts.add(Platform.isWindows ? s.toLowerCase() : s);
+        }
+      }
+      return parts.join('/');
+    }
+
+    final r = norm(root);
+    final p = norm(path);
+    return p.startsWith('$r/');
+  }
+
+  /// [dir]/[name] с проверкой, что результат не выходит за [dir].
+  static String childPath(String dir, String name) {
+    final path = join(dir, name);
+    if (!isWithin(dir, path)) {
+      throw FileSystemException('Недопустимое имя файла с сервера', name);
+    }
+    return path;
   }
 
   /// На Android качаем во временную папку (файл потом уходит в Download),
@@ -72,53 +147,90 @@ class LocalFiles {
     }
   }
 
-  /// Свободное имя: file.txt → file (1).txt, если такой уже есть.
-  static String makeAvailable(String dir, String name) {
-    if (kIsWeb) return name;
-    try {
-      var candidate = join(dir, name);
-      if (!File(candidate).existsSync()) return name;
+  /// Пути, уже отданные передачам в очереди, но ещё не созданные на диске.
+  static final _reserved = <String>{};
+
+  static String _key(String path) =>
+      !kIsWeb && Platform.isWindows ? path.toLowerCase() : path;
+
+  static bool _taken(String path) =>
+      _reserved.contains(_key(path)) ||
+      FileSystemEntity.typeSync(path, followLinks: false) != FileSystemEntityType.notFound;
+
+  /// Свободный путь в [dir] для имени с сервера: file.txt → file (1).txt,
+  /// если такой файл/папка уже есть или занят другой передачей. Путь
+  /// резервируется до [releasePath] - две параллельные загрузки одного
+  /// имени не получат один и тот же файл.
+  static String uniquePath(String dir, String remoteName) {
+    final name = safeName(remoteName);
+    if (kIsWeb) return join(dir, name);
+    var candidate = childPath(dir, name);
+    if (_taken(candidate)) {
       final dot = name.lastIndexOf('.');
       final base = dot > 0 ? name.substring(0, dot) : name;
       final ext = dot > 0 ? name.substring(dot) : '';
-      for (var i = 1; i < 1000; i++) {
-        final next = '$base ($i)$ext';
-        if (!File(join(dir, next)).existsSync()) return next;
+      for (var i = 1;; i++) {
+        candidate = childPath(dir, '$base ($i)$ext');
+        if (!_taken(candidate)) break;
       }
-      return name;
-    } catch (_) {
-      return name;
     }
+    _reserved.add(_key(candidate));
+    return candidate;
   }
 
-  /// Уникальный путь к файлу в указанной папке.
-  static String uniquePath(String dir, String name) => join(dir, makeAvailable(dir, name));
+  /// Снять резерв с пути (передача закончилась или не началась).
+  static void releasePath(String path) => _reserved.remove(_key(path));
 
   /// Временная папка для открытия файлов во внешнем редакторе.
+  /// Заодно убирает такие папки старше суток: сразу после закрытия вкладки
+  /// их не удаляем, чтобы не отобрать файл у ещё открытого редактора.
   static Future<Directory> editTempDir() async {
-    if (kIsWeb) return Directory('/tmp');
+    final base = Directory.systemTemp;
     try {
-      final base = Directory.systemTemp.path;
-      final dir = Directory(join(base, 'vysh-edit-${DateTime.now().millisecondsSinceEpoch}'));
-      await dir.create(recursive: true);
-      return dir;
-    } catch (_) {
-      return Directory('/tmp');
-    }
-  }
-
-  /// Открыть файл программой по умолчанию.
-  static Future<void> openWithSystem(String path) async {
-    if (kIsWeb) return;
-    try {
-      if (Platform.isWindows) {
-        await Process.start('cmd', ['/c', 'start', '', path], mode: ProcessStartMode.detached);
-      } else if (Platform.isMacOS) {
-        await Process.start('open', [path], mode: ProcessStartMode.detached);
-      } else if (Platform.isLinux) {
-        await Process.start('xdg-open', [path], mode: ProcessStartMode.detached);
+      final old = DateTime.now().subtract(const Duration(days: 1));
+      await for (final e in base.list(followLinks: false)) {
+        if (e is! Directory || !e.path.split(RegExp(r'[\\/]')).last.startsWith('vysh-edit-')) {
+          continue;
+        }
+        try {
+          if ((await e.stat()).modified.isBefore(old)) await e.delete(recursive: true);
+        } catch (_) {}
       }
     } catch (_) {}
+    return base.createTemp('vysh-edit-');
+  }
+
+  /// Открыть файл программой по умолчанию. Бросает исключение при ошибке.
+  ///
+  /// Windows: не через `cmd /c start` - cmd разбирает строку сам, и имя файла
+  /// с сервера вроде `a&calc` выполнило бы команду. PowerShell получает путь
+  /// через переменную окружения и не разбирает его как код.
+  static Future<void> openWithSystem(String path) async {
+    if (kIsWeb) return;
+    if (Platform.isWindows) {
+      // Файл - Invoke-Item -LiteralPath (без разбора `[`/`*` как шаблона),
+      // ссылку - Start-Process.
+      final url = RegExp(r'^https?://', caseSensitive: false).hasMatch(path);
+      final r = await Process.run(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          url
+              ? r'Start-Process -FilePath $env:VYSH_OPEN_PATH'
+              : r'Invoke-Item -LiteralPath $env:VYSH_OPEN_PATH',
+        ],
+        environment: {'VYSH_OPEN_PATH': path},
+      );
+      if (r.exitCode != 0) {
+        throw FileSystemException('Не удалось открыть файл: ${'${r.stderr}'.trim()}', path);
+      }
+    } else if (Platform.isMacOS) {
+      await Process.start('open', [path], mode: ProcessStartMode.detached);
+    } else if (Platform.isLinux) {
+      await Process.start('xdg-open', [path], mode: ProcessStartMode.detached);
+    }
   }
 
   /// Показать файл/папку в файловом менеджере.

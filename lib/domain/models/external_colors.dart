@@ -37,8 +37,10 @@ class ExternalColors {
       o != null &&
       o.seed == seed &&
       o.source == source &&
+      o.path == path &&
       o.brightness == brightness &&
       o.terminalBackground == terminalBackground &&
+      o.terminalForeground == terminalForeground &&
       _listEq(o.ansi, ansi) &&
       _rolesEq(o.roles, roles);
 

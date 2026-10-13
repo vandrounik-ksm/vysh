@@ -31,7 +31,7 @@ class ConnLogEntry {
 
 class TerminalSession extends ChangeNotifier {
   TerminalSession({
-    required this.host,
+    required Host host,
     required this.connector,
     required this.prompts,
     required this.secrets,
@@ -40,18 +40,42 @@ class TerminalSession extends ChangeNotifier {
     this.defaultKeepAliveSeconds = 60,
     String? initialPassword,
     int scrollbackLines = 10000,
-  })  : _memPassword = initialPassword,
+  })  : _host = host,
+        _memPassword = initialPassword,
         terminal = Terminal(maxLines: scrollbackLines);
 
   /// Пароль, введённый в этой сессии (в редакторе хоста или в диалоге).
   /// Живёт только в памяти - чтобы переподключение не спрашивало его заново.
+  /// Действует только для той цели, для которой его ввели (см. [host]).
   String? _memPassword;
 
   /// Интервал KeepAlive по умолчанию из настроек (в секундах).
   final int defaultKeepAliveSeconds;
 
   /// Хост; обновляется перед переподключением, если его отредактировали.
-  Host host;
+  Host get host => _host;
+  Host _host;
+  set host(Host next) {
+    if (targetOf(next) != targetOf(_host) || next.auth != _host.auth) {
+      // Сменился сервер, порт, логин или способ входа: пароль прежней цели
+      // не годится, а открытые «локально» файлы больше не должны заливаться
+      // по новому адресу.
+      _memPassword = null;
+      _closeLocalEdits();
+    }
+    _host = next;
+  }
+
+  /// Куда именно подключаемся: `user@address:port`.
+  static String targetOf(Host h) =>
+      '${h.username.trim()}@${h.address.trim().toLowerCase()}:${h.port}';
+
+  /// Цель текущего подключения (для привязки локального редактирования).
+  String get target => targetOf(_host);
+
+  /// Забыть пароль, введённый в этой сессии («Забыть пароль», смена пароля).
+  void forgetPassword() => _memPassword = null;
+
   final SshConnector connector;
   final SessionPrompts prompts;
   final SecretStore secrets;
@@ -257,17 +281,49 @@ class TerminalSession extends ChangeNotifier {
   SshShell? _shell;
   Future<SftpSession>? _sftp;
 
-  /// Подписки на файлы, открытые «локально» (автозагрузка при сохранении).
-  final editWatchers = <StreamSubscription<Object?>>[];
+  /// Файлы, открытые «локально» (автозагрузка при сохранении).
+  final _localEdits = <LocalEditHandle>[];
   StreamSubscription<String>? _outputSub;
   bool _connecting = false;
   bool _disposed = false;
+
+  /// Поколение подключения. Всё, что относится к прежней попытке
+  /// (поздний shell, завершение старого транспорта), сверяется с ним
+  /// и не трогает новое соединение.
+  int _gen = 0;
+
+  /// Отмена текущей попытки подключения (закрытие вкладки).
+  Completer<void>? _cancelAttempt;
+
+  bool get isDisposed => _disposed;
+
+  /// Зарегистрировать локальное редактирование: оно закроется вместе
+  /// с сессией или при смене цели подключения.
+  void addLocalEdit(LocalEditHandle edit) {
+    if (_disposed) {
+      edit.close();
+      return;
+    }
+    _localEdits.add(edit);
+  }
+
+  void removeLocalEdit(LocalEditHandle edit) => _localEdits.remove(edit);
+
+  void _closeLocalEdits() {
+    final edits = [..._localEdits];
+    _localEdits.clear();
+    for (final e in edits) {
+      e.close();
+    }
+  }
 
   // ─── Публичное API ────────────────────────────────────────────────
 
   Future<void> connect() async {
     if (_connecting || _disposed) return;
     _connecting = true;
+    final gen = ++_gen;
+    final cancel = _cancelAttempt = Completer<void>();
     _teardown();
     connLog.clear();
     lastFailure = null;
@@ -277,19 +333,37 @@ class TerminalSession extends ChangeNotifier {
     terminal.onOutput = null;
     _info('Подключение к ${host.displayAddress}…');
 
+    bool stale() => _disposed || gen != _gen;
+
     try {
-      final transport = await _connectWithRetries();
-      if (_disposed) {
+      final transport = await _connectWithRetries(cancel.future);
+      if (stale()) {
         await transport.close();
         return;
       }
       _transport = transport;
       _serverVersion = transport.serverVersion;
 
-      final shell = await transport.openShell(
-        columns: max(terminal.viewWidth, 20),
-        rows: max(terminal.viewHeight, 5),
-      );
+      final SshShell shell;
+      try {
+        shell = await transport.openShell(
+          columns: max(terminal.viewWidth, 20),
+          rows: max(terminal.viewHeight, 5),
+        );
+      } catch (_) {
+        // Без оболочки соединение не нужно - не оставляем его висеть.
+        if (identical(_transport, transport)) _transport = null;
+        await transport.close();
+        rethrow;
+      }
+      if (stale()) {
+        // Вкладку закрыли (или начали новое подключение), пока сервер
+        // открывал оболочку: поздний ресурс сразу освобождаем.
+        shell.close();
+        if (identical(_transport, transport)) _transport = null;
+        await transport.close();
+        return;
+      }
       _shell = shell;
 
       terminal.onOutput = (data) {
@@ -324,10 +398,12 @@ class TerminalSession extends ChangeNotifier {
 
       _setStatus(SessionStatus.ready);
 
-      shell.done.then((_) => _onEnded(clean: true));
-      transport.done.then((_) => _onEnded(clean: false));
+      // Завершение действует только на своё поколение: запоздалый done
+      // прежнего транспорта не закроет новое соединение.
+      shell.done.then((_) => _onEnded(gen, clean: true));
+      transport.done.then((_) => _onEnded(gen, clean: false));
     } on SshFailure catch (e) {
-      if (_disposed) return;
+      if (stale()) return;
       if (e.kind == SshFailureKind.cancelled) {
         _info('Подключение отменено.');
       } else {
@@ -337,13 +413,14 @@ class TerminalSession extends ChangeNotifier {
       _setStatus(SessionStatus.lost);
       _offerReconnect();
     } catch (e) {
-      if (_disposed) return;
+      if (stale()) return;
       _error('Неожиданная ошибка: $e');
       lastFailure = SshFailure(SshFailureKind.other, 'Неожиданная ошибка: $e');
       _setStatus(SessionStatus.lost);
       _offerReconnect();
     } finally {
-      _connecting = false;
+      if (identical(_cancelAttempt, cancel)) _cancelAttempt = null;
+      if (gen == _gen) _connecting = false;
     }
   }
 
@@ -351,10 +428,12 @@ class TerminalSession extends ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    for (final w in editWatchers) {
-      w.cancel();
-    }
-    editWatchers.clear();
+    _gen++;
+    // Прерываем незавершённую попытку: сокет закроется сразу,
+    // а не после таймаута.
+    final cancel = _cancelAttempt;
+    if (cancel != null && !cancel.isCompleted) cancel.complete();
+    _closeLocalEdits();
     _teardown();
     super.dispose();
   }
@@ -381,24 +460,42 @@ class TerminalSession extends ChangeNotifier {
     if (transport == null || _status != SessionStatus.ready) {
       return Future.error(const SftpFailure('Нет соединения с сервером'));
     }
-    return _sftp ??= transport
-        .openSftp()
+    final existing = _sftp;
+    if (existing != null) return existing;
+
+    final gen = _gen;
+    final opening = transport.openSftp();
+    late final Future<SftpSession> result;
+    result = opening
         .timeout(
           const Duration(seconds: 10),
-          onTimeout: () => throw const SftpFailure(
-            'Сервер не ответил по SFTP. Возможно, на нём нет sftp-server '
-            '(на OpenWrt: opkg install openssh-sftp-server).',
-          ),
+          onTimeout: () {
+            // Канал может всё-таки открыться позже - тогда сразу закрываем.
+            opening.then((s) => s.close()).catchError((_) {});
+            throw const SftpFailure(
+              'Сервер не ответил по SFTP. Возможно, на нём нет sftp-server '
+              '(на OpenWrt: opkg install openssh-sftp-server).',
+            );
+          },
         )
+        .then((s) {
+          // Пока канал открывался, соединение сменилось или вкладку закрыли.
+          if (_disposed || gen != _gen || !identical(_transport, transport)) {
+            s.close();
+            throw const SftpFailure('Соединение с сервером закрыто');
+          }
+          return s;
+        })
         .catchError((Object e) {
-          _sftp = null;
+          if (identical(_sftp, result)) _sftp = null;
           throw e;
         });
+    return _sftp = result;
   }
 
   // ─── Подключение ──────────────────────────────────────────────────
 
-  Future<SshTransport> _connectWithRetries() async {
+  Future<SshTransport> _connectWithRetries(Future<void> abort) async {
     var keys = await _loadKeys();
 
     String? password;
@@ -441,14 +538,18 @@ class TerminalSession extends ChangeNotifier {
             username: host.username,
             keys: keys,
             keepAliveInterval: keepDuration,
+            cancelled: abort,
             password: host.auth == AuthMethod.password
                 ? () => providePassword(retry)
                 : null,
             interactive: (name, instruction, list) async {
               // Обычный «Password:» через keyboard-interactive - отвечаем паролем.
+              // Одноразовые коды и прочие вопросы сервера показываем как есть:
+              // пароль туда отправлять нельзя.
               if (host.auth == AuthMethod.password &&
                   list.length == 1 &&
-                  !list.first.echo) {
+                  !list.first.echo &&
+                  isPasswordPrompt(list.first.text)) {
                 final p = await providePassword(retry);
                 return p == null ? null : [p];
               }
@@ -487,13 +588,13 @@ class TerminalSession extends ChangeNotifier {
           case SshFailureKind.auth when host.auth == AuthMethod.password:
             if (passwordFromStore) {
               passwordFromStore = false;
-              await secrets.delete(passwordKey(host.id));
+              await _deleteSecret(passwordKey(host.id));
             }
             password = null;
             _memPassword = null;
             _error('Неверный логин или пароль.');
           case SshFailureKind.keyPassphrase:
-            await secrets.delete(passphraseKey(host.id));
+            await _deleteSecret(passphraseKey(host.id));
             _error(e.message);
             keys = await _loadKeys(retry: true);
           default:
@@ -505,6 +606,14 @@ class TerminalSession extends ChangeNotifier {
       SshFailureKind.auth,
       'Не удалось войти после трёх попыток.',
     );
+  }
+
+  Future<void> _deleteSecret(String key) async {
+    try {
+      await secrets.delete(key);
+    } catch (_) {
+      _info('Не удалось удалить неверный секрет: системное хранилище недоступно.');
+    }
   }
 
   Future<bool> _verifyHostKey(String type, String fingerprint) async {
@@ -587,8 +696,8 @@ class TerminalSession extends ChangeNotifier {
 
   // ─── Завершение ───────────────────────────────────────────────────
 
-  void _onEnded({required bool clean}) {
-    if (_disposed || _status != SessionStatus.ready) return;
+  void _onEnded(int gen, {required bool clean}) {
+    if (_disposed || gen != _gen || _status != SessionStatus.ready) return;
     _teardown();
     if (clean) {
       _info('Сессия завершена.');
@@ -642,6 +751,24 @@ class TerminalSession extends ChangeNotifier {
     _log(text, error: true);
     terminal.write('\r\n\x1b[31m✗ $text\x1b[0m\r\n');
   }
+}
+
+/// Локальное редактирование файла, привязанное к сессии.
+abstract interface class LocalEditHandle {
+  /// Остановить наблюдение и автозагрузку.
+  void close();
+}
+
+/// Похож ли единственный скрытый вопрос keyboard-interactive на запрос
+/// пароля. Одноразовые коды (Verification code, OTP, token, PIN) - нет:
+/// на них отвечает пользователь, сохранённый пароль туда не отправляем.
+bool isPasswordPrompt(String text) {
+  final t = text.toLowerCase();
+  if (RegExp(r'code|otp|token|verif|one[- ]?time|2fa|mfa|totp|pin\b|passcode|код|токен')
+      .hasMatch(t)) {
+    return false;
+  }
+  return RegExp(r'password|passwort|mot de passe|contrase|пароль').hasMatch(t);
 }
 
 /// `~/...` → домашняя папка (на Windows - %USERPROFILE%).

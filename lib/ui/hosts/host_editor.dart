@@ -181,9 +181,21 @@ class _HostEditorSheetState extends ConsumerState<_HostEditorSheet> {
     final secrets = ref.read(secretStoreProvider);
     final pwd = _password.text;
     String? warning;
+    final old = widget.host;
+    if (_isEdit &&
+        old != null &&
+        (pwd.isNotEmpty || !_rememberPassword || host.auth != old.auth)) {
+      // Пароль сменили или убрали - открытые вкладки не должны
+      // переподключаться со старым паролем из памяти.
+      ref.read(tabsProvider.notifier).forgetSessionPasswords(host.id);
+    }
     if (host.auth != AuthMethod.password || !_rememberPassword) {
       // Пароль не нужен или его просили не хранить - убираем сохранённый.
-      await secrets.delete(passwordKey(host.id));
+      try {
+        await secrets.delete(passwordKey(host.id));
+      } catch (_) {
+        warning = 'Не удалось удалить сохранённый пароль: системное хранилище недоступно';
+      }
     } else if (pwd.isNotEmpty) {
       try {
         await secrets.write(passwordKey(host.id), pwd);

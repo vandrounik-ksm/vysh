@@ -123,7 +123,7 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: () => LocalFiles.openWithSystem(_themesDocUrl),
+                onPressed: () => LocalFiles.openWithSystem(_themesDocUrl).catchError((_) {}),
                 icon: const Icon(Icons.menu_book_outlined, size: 18),
                 label: const Text('matugen, wallust, pywal, caelestia'),
               ),

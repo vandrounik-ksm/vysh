@@ -37,9 +37,13 @@ class RemoteEntry {
   }
 }
 
+/// Что именно не получилось - чтобы код не разбирал текст сообщения.
+enum SftpFailureCode { noSuchFile, permissionDenied, notADirectory, exists, other }
+
 class SftpFailure implements Exception {
-  const SftpFailure(this.message);
+  const SftpFailure(this.message, {this.code = SftpFailureCode.other});
   final String message;
+  final SftpFailureCode code;
   @override
   String toString() => message;
 }
@@ -89,6 +93,8 @@ abstract interface class SftpSession {
   Future<void> removeDir(String path);
   Future<void> chmod(String path, int mode);
 
+  /// Отмена прерывает передачу сразу, даже если сервер перестал присылать
+  /// данные; долгое отсутствие данных считается ошибкой.
   Future<void> download(
     String remotePath,
     File local, {
@@ -96,6 +102,9 @@ abstract interface class SftpSession {
     required ProgressCallback onProgress,
   });
 
+  /// Загрузка без риска для существующего файла: данные пишутся во временный
+  /// файл рядом и только после успеха заменяют [remotePath] (с сохранением
+  /// прав прежнего файла). При ошибке или отмене прежний файл не тронут.
   Future<void> upload(
     File local,
     String remotePath, {

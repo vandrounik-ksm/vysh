@@ -9,24 +9,42 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.PowerManager
 
+/// Удерживает процесс, пока во вкладках есть живые SSH-сессии.
+///
+/// Сервис сам владеет wake lock: берёт его при старте, продлевает по таймеру,
+/// пока работает, и отпускает при остановке. Сессии живут в Dart-движке
+/// Activity, поэтому после гибели процесса восстановить их нечем - сервис
+/// не перезапускается (START_NOT_STICKY), а Activity при уничтожении
+/// останавливает его.
 class SshForegroundService : Service() {
     companion object {
         private const val CHANNEL_ID = "vysh_ssh_foreground"
         private const val NOTIFICATION_ID = 40401
 
-        fun start(context: Context, hostTitle: String = "SSH-соединение") {
+        /// Wake lock берётся на этот срок и продлевается чуть раньше.
+        private const val WAKE_LOCK_MS = 30 * 60 * 1000L
+        private const val RENEW_MS = 25 * 60 * 1000L
+
+        fun start(context: Context, hostTitle: String = "SSH-соединение"): Boolean {
             val intent = Intent(context, SshForegroundService::class.java).apply {
                 putExtra("title", hostTitle)
             }
-            try {
+            return try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(intent)
                 } else {
                     context.startService(intent)
                 }
-            } catch (_: Exception) {}
+                true
+            } catch (_: Exception) {
+                // Например, ForegroundServiceStartNotAllowedException из фона.
+                false
+            }
         }
 
         fun stop(context: Context) {
@@ -34,6 +52,15 @@ class SshForegroundService : Service() {
                 val intent = Intent(context, SshForegroundService::class.java)
                 context.stopService(intent)
             } catch (_: Exception) {}
+        }
+    }
+
+    private var wakeLock: PowerManager.WakeLock? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val renew = object : Runnable {
+        override fun run() {
+            acquireWakeLock()
+            handler.postDelayed(this, RENEW_MS)
         }
     }
 
@@ -58,9 +85,40 @@ class SshForegroundService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+            // Без foreground-режима сервис бесполезен и будет убит системой.
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
-        return START_STICKY
+        handler.removeCallbacks(renew)
+        renew.run()
+        return START_NOT_STICKY
+    }
+
+    /// Android 15+: у dataSync лимит 6 часов фоновой работы за сутки.
+    /// По истечении нужно остановиться, иначе система завершит приложение.
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        stopSelf()
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(renew)
+        try {
+            if (wakeLock?.isHeld == true) wakeLock?.release()
+        } catch (_: Exception) {}
+        wakeLock = null
+        super.onDestroy()
+    }
+
+    private fun acquireWakeLock() {
+        try {
+            val lock = wakeLock ?: (getSystemService(Context.POWER_SERVICE) as PowerManager)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "vysh:ssh_session")
+                .apply { setReferenceCounted(false) }
+                .also { wakeLock = it }
+            lock.acquire(WAKE_LOCK_MS)
+        } catch (_: Exception) {}
     }
 
     private fun createNotificationChannel() {

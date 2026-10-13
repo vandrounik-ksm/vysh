@@ -5,15 +5,51 @@ on:
   push:
     tags: ['v*']
 
+# Запись в репозиторий нужна только шагу публикации (см. job release).
 permissions:
-  contents: write
+  contents: read
 
 env:
+  # Та же версия, что в ci.yml и docs/RELEASING.md.
   FLUTTER_VERSION: 3.47.6
 
 jobs:
+  # Сборки и публикация - только для коммита, прошедшего проверки.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Версия тега = pubspec.yaml = lib/app/version.dart, есть запись в CHANGELOG
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          line=$(grep -E '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*//')
+          pub="${line%%+*}"
+          build="${line##*+}"
+          dart_ver=$(sed -nE "s/^const appVersion = '([^']+)';/\1/p" lib/app/version.dart)
+          dart_build=$(sed -nE 's/^const vyshBuildNumber = ([0-9]+);/\1/p' lib/app/version.dart)
+          fail=0
+          [ "$tag" = "$pub" ] || { echo "::error::Тег $tag, а в pubspec.yaml $pub"; fail=1; }
+          [ "$pub" = "$dart_ver" ] || { echo "::error::pubspec.yaml $pub, а в version.dart $dart_ver"; fail=1; }
+          [ "$build" = "$dart_build" ] || { echo "::error::Номер сборки: pubspec.yaml $build, version.dart $dart_build"; fail=1; }
+          if ! grep -qF "## [$tag]" CHANGELOG.md; then
+            case "$tag" in
+              *-*) echo "::warning::В CHANGELOG.md нет раздела [$tag]" ;;
+              *) echo "::error::В CHANGELOG.md нет раздела [$tag]"; fail=1 ;;
+            esac
+          fi
+          exit $fail
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
   linux:
     # TODO (этап 6): собирать в контейнере на старой базе ради Astra + AppImage/deb через fastforge.
+    needs: check
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +74,7 @@ jobs:
           path: vysh-*-linux-x64.tar.gz
 
   windows:
+    needs: check
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,6 +101,7 @@ jobs:
           path: vysh-*-windows-x64.zip
 
   android:
+    needs: check
     runs-on: ubuntu-latest
     env:
       KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -121,6 +159,8 @@ jobs:
   release:
     needs: [linux, windows, android]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:

@@ -20,10 +20,8 @@ class KeyringSecretStore implements SecretStore {
   @override
   Future<void> write(String key, String value) => _storage.write(key: key, value: value);
 
+  /// Бросает исключение, если хранилище недоступно: «пароль удалён»
+  /// можно показывать только после настоящего удаления.
   @override
-  Future<void> delete(String key) async {
-    try {
-      await _storage.delete(key: key);
-    } catch (_) {}
-  }
+  Future<void> delete(String key) => _storage.delete(key: key);
 }

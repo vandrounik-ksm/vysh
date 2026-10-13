@@ -65,9 +65,16 @@ class Transfer {
 typedef TransferRunner = Future<void> Function(CancelToken cancel, ProgressCallback onProgress);
 
 class _Job {
-  _Job(this.run, this.onDone);
+  _Job(this.run, this.onDone, this.onSettled);
   final TransferRunner run;
-  final void Function()? onDone;
+
+  /// Продолжение после успешной передачи (например, открыть файл). Задача
+  /// считается выполненной только после него; его ошибка - ошибка задачи.
+  final FutureOr<void> Function()? onDone;
+
+  /// Вызывается всегда, когда задача закончилась (успех, ошибка, отмена) -
+  /// чтобы освободить связанные ресурсы.
+  final void Function()? onSettled;
   final cancel = CancelToken();
 }
 
@@ -77,6 +84,9 @@ final transferQueueProvider =
 /// Очередь SFTP-передач: не больше [maxParallel] одновременно.
 class TransferQueue extends Notifier<List<Transfer>> {
   static const maxParallel = 3;
+
+  /// Сколько завершённых передач помнить (на все вкладки).
+  static const maxFinished = 200;
   final _jobs = <String, _Job>{};
 
   @override
@@ -90,10 +100,11 @@ class TransferQueue extends Notifier<List<Transfer>> {
     required String remotePath,
     required int total,
     required TransferRunner run,
-    void Function()? onDone,
+    FutureOr<void> Function()? onDone,
+    void Function()? onSettled,
   }) {
     final id = newId();
-    _jobs[id] = _Job(run, onDone);
+    _jobs[id] = _Job(run, onDone, onSettled);
     state = [
       ...state,
       Transfer(
@@ -115,7 +126,7 @@ class TransferQueue extends Notifier<List<Transfer>> {
     if (t == null || !t.isActive) return;
     _jobs[id]?.cancel.cancel();
     if (t.status == TransferStatus.queued) {
-      _jobs.remove(id);
+      _jobs.remove(id)?.onSettled?.call();
       _update(id, (t) => t.copyWith(status: TransferStatus.cancelled));
     }
   }
@@ -124,6 +135,12 @@ class TransferQueue extends Notifier<List<Transfer>> {
     for (final t in state.where((t) => t.tabId == tabId && t.isActive).toList()) {
       cancel(t.id);
     }
+  }
+
+  /// Вкладку закрыли: отменить её передачи и забыть завершённые.
+  void closeTab(String tabId) {
+    cancelAllForTab(tabId);
+    clearFinished(tabId);
   }
 
   void clearFinished(String tabId) {
@@ -176,12 +193,12 @@ class TransferQueue extends Notifier<List<Transfer>> {
       _update(id, (t) => t.copyWith(done: done, bytesPerSecond: speed));
     }
 
-    job.run(job.cancel, onProgress).then((_) {
+    job.run(job.cancel, onProgress).then((_) async {
       if (job.cancel.isCancelled) {
         _update(id, (t) => t.copyWith(status: TransferStatus.cancelled));
       } else {
+        await job.onDone?.call();
         _update(id, (t) => t.copyWith(status: TransferStatus.done, done: t.total));
-        job.onDone?.call();
       }
     }).catchError((Object e) {
       final cancelled = e is TransferCancelled || job.cancel.isCancelled;
@@ -194,8 +211,29 @@ class TransferQueue extends Notifier<List<Transfer>> {
       );
     }).whenComplete(() {
       _jobs.remove(id);
+      try {
+        job.onSettled?.call();
+      } catch (_) {}
+      _trimHistory();
       _pump();
     });
+  }
+
+  void _trimHistory() {
+    if (!ref.mounted) return;
+    final finished = state.where((t) => !t.isActive).length;
+    if (finished <= maxFinished) return;
+    // Выбрасываем самые старые завершённые, активные не трогаем.
+    var drop = finished - maxFinished;
+    final next = <Transfer>[];
+    for (final t in state) {
+      if (!t.isActive && drop > 0) {
+        drop--;
+        continue;
+      }
+      next.add(t);
+    }
+    state = next;
   }
 
   void _update(String id, Transfer Function(Transfer) f) {

@@ -15,6 +15,7 @@ import '../../domain/models/session_tab.dart';
 import '../../domain/services/external_colors_controller.dart';
 import '../../domain/services/settings_controller.dart';
 import '../../domain/services/tabs_controller.dart';
+import '../../infra/platform/local_files.dart';
 import '../../domain/services/terminal_session.dart';
 import '../../infra/platform/desktop_env.dart';
 import '../sftp/sftp_pane.dart';
@@ -281,15 +282,17 @@ class _SessionViewState extends ConsumerState<SessionView>
 
     Clipboard.setData(ClipboardData(text: text));
 
-    // Удаляем клиентский ввод без анализа содержимого терминала.
-    if (text.trim().isNotEmpty) {
-      if (text.length <= 80 && !text.contains('\n')) {
-        terminal.textInput(
-          String.fromCharCodes(List.filled(text.length, 0x7f)),
-        );
-      } else {
-        terminal.textInput('\x15');
-      }
+    // Стираем только то, что пользователь сам набрал в конце строки ввода.
+    // Выделенный вывод программ или середину команды не трогаем: Backspace
+    // по длине выделения стёр бы совсем другие символы. Тогда «Вырезать»
+    // работает как «Копировать».
+    final typed = ref
+            .read(tabsProvider.notifier)
+            .sessionOf(widget.tab.id)
+            ?.clientTypedCommand ??
+        '';
+    if (text.isNotEmpty && !text.contains(RegExp(r'[\r\n]')) && typed.endsWith(text)) {
+      terminal.textInput(String.fromCharCodes(List.filled(text.length, 0x7f)));
     }
 
     _controller.clearSelection();
@@ -326,10 +329,11 @@ class _SessionViewState extends ConsumerState<SessionView>
       return;
     }
 
-    final lines = text.trimRight().split(RegExp(r'\r?\n'));
+    // Проверяем ровно то, что уйдёт в терминал: любой CR или LF.
+    final plan = PastePlan(text);
 
-    if (lines.length > 1 && ref.read(settingsProvider).confirmMultilinePaste) {
-      final ok = await _confirmPaste(lines);
+    if (plan.hasLineBreaks && ref.read(settingsProvider).confirmMultilinePaste) {
+      final ok = await _confirmPaste(plan);
 
       if (ok == null) {
         _focus.requestFocus();
@@ -337,7 +341,7 @@ class _SessionViewState extends ConsumerState<SessionView>
       }
 
       if (ok == false) {
-        text = lines.join(' ');
+        text = plan.singleLine;
       }
     }
 
@@ -361,11 +365,13 @@ class _SessionViewState extends ConsumerState<SessionView>
   }
 
   /// true - вставить как есть, false - одной строкой, null - отмена.
-  Future<bool?> _confirmPaste(List<String> lines) {
+  Future<bool?> _confirmPaste(PastePlan plan) {
     final strings = SelectionStrings.of(
       context,
       ref.read(settingsProvider).language,
     );
+    final lines = plan.visibleLines;
+    final trailing = plan.onlyTrailingEnter;
 
     return showDialog<bool>(
       context: context,
@@ -377,14 +383,16 @@ class _SessionViewState extends ConsumerState<SessionView>
 
         return AlertDialog(
           icon: Icon(Icons.content_paste_go, color: scheme.primary),
-          title: Text(strings.multilineTitle(lines.length)),
+          title: Text(trailing
+              ? strings.trailingEnterTitle
+              : strings.multilineTitle(lines.length)),
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(strings.multilineDesc),
+                Text(trailing ? strings.trailingEnterDesc : strings.multilineDesc),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -490,7 +498,10 @@ class _SessionViewState extends ConsumerState<SessionView>
         : '';
 
     if (text.isNotEmpty) {
-      Clipboard.setData(ClipboardData(text: text));
+      // Системное «Поделиться»; где его нет - хотя бы в буфер обмена.
+      LocalFiles.shareText(text).then((shared) {
+        if (!shared) Clipboard.setData(ClipboardData(text: text));
+      });
     } else {
       _showToast(strings.nothingToCopy);
     }

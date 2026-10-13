@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../infra/platform/net_resolve.dart';
 import '../../infra/storage/json_store.dart';
 import '../models/host.dart';
 import '../ports/secret_store.dart';
@@ -17,11 +19,18 @@ class HostsController extends Notifier<List<Host>> {
   List<Host> build() {
     final raw = _store.readSync();
     if (raw is! List) return const [];
-    return raw
-        .whereType<Map<String, Object?>>()
-        .map(Host.fromJson)
-        .where((h) => h.address.isNotEmpty)
-        .toList();
+    // Одна испорченная запись не должна стоить всего списка.
+    final hosts = <Host>[];
+    for (final item in raw) {
+      if (item is! Map<String, Object?>) continue;
+      try {
+        final h = Host.fromJson(item);
+        if (h.address.isNotEmpty) hosts.add(h);
+      } catch (e) {
+        debugPrint('vysh: пропущена запись hosts.json: $e');
+      }
+    }
+    return hosts;
   }
 
   void upsert(Host host) {
@@ -33,11 +42,7 @@ class HostsController extends Notifier<List<Host>> {
   }
 
   void remove(String id) {
-    state = state.where((h) => h.id != id).toList();
-    _persist();
-    final secrets = ref.read(secretStoreProvider);
-    secrets.delete(passwordKey(id));
-    secrets.delete(passphraseKey(id));
+    removeMany([id]);
   }
 
   /// Удалить несколько хостов разом (вместе с их сохранёнными паролями).
@@ -46,14 +51,17 @@ class HostsController extends Notifier<List<Host>> {
     if (set.isEmpty) return;
     state = state.where((h) => !set.contains(h.id)).toList();
     _persist();
-    final secrets = ref.read(secretStoreProvider);
     for (final id in set) {
-      secrets.delete(passwordKey(id));
-      secrets.delete(passphraseKey(id));
+      // Хост уже удалён из списка; секрет, который не удалось стереть,
+      // только логируем - показать его пользователю всё равно негде.
+      forgetSecrets(id).catchError((Object e) {
+        debugPrint('vysh: не удалось удалить пароль хоста $id: $e');
+      });
     }
   }
 
   /// Забыть сохранённые пароль и парольную фразу хоста.
+  /// Бросает исключение, если системное хранилище недоступно.
   Future<void> forgetSecrets(String id) async {
     final secrets = ref.read(secretStoreProvider);
     await secrets.delete(passwordKey(id));
@@ -86,36 +94,66 @@ final reachabilityProvider = FutureProvider.autoDispose
   final host = target.$1.trim();
   final port = target.$2;
 
-  // Адреса ищем сами: IPv4 первым. Иначе при сломанном IPv6 вся проверка
-  // уходила в таймаут на первом же адресе, хотя по IPv4 сервер отвечает.
+  // Тот же порядок адресов, что и при SSH-подключении (IPv4 первым).
   List<InternetAddress> addrs;
   try {
-    addrs = await InternetAddress.lookup(host).timeout(const Duration(seconds: 4));
+    addrs = await resolveHost(host, timeout: const Duration(seconds: 4));
   } catch (e) {
     return (ms: null, error: 'DNS: ${_reason(e)}');
   }
-  addrs.sort((a, b) => (a.type == InternetAddressType.IPv4 ? 0 : 1)
-      .compareTo(b.type == InternetAddressType.IPv4 ? 0 : 1));
 
-  String? error;
-  // Вторая попытка - на случай потерянного пакета или лимита новых
-  // подключений на сервере (ufw limit, fail2ban).
-  for (var attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) await Future<void>.delayed(const Duration(milliseconds: 700));
-    for (final addr in addrs.take(3)) {
-      final sw = Stopwatch()..start();
-      try {
-        final socket =
-            await Socket.connect(addr, port, timeout: const Duration(seconds: 4));
-        socket.destroy();
-        return (ms: sw.elapsedMilliseconds, error: null);
-      } catch (e) {
-        error = '${addr.address}: ${_reason(e)}';
+  await _probeSlots.acquire();
+  try {
+    String? error;
+    // Вторая попытка - на случай потерянного пакета или лимита новых
+    // подключений на сервере (ufw limit, fail2ban).
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) await Future<void>.delayed(const Duration(milliseconds: 700));
+      for (final addr in addrs.take(maxAddressAttempts)) {
+        final sw = Stopwatch()..start();
+        try {
+          final socket =
+              await Socket.connect(addr, port, timeout: const Duration(seconds: 4));
+          socket.destroy();
+          return (ms: sw.elapsedMilliseconds, error: null);
+        } catch (e) {
+          error = '${addr.address}: ${_reason(e)}';
+        }
       }
     }
+    return (ms: null, error: error);
+  } finally {
+    _probeSlots.release();
   }
-  return (ms: null, error: error);
 });
+
+/// Не больше 16 проверок доступности одновременно: при сотне хостов
+/// иначе разом открывалась сотня сокетов.
+final _probeSlots = _Semaphore(16);
+
+class _Semaphore {
+  _Semaphore(this._free);
+  int _free;
+  final _waiting = <Completer<void>>[];
+
+  Future<void> acquire() {
+    if (_free > 0) {
+      _free--;
+      return Future.value();
+    }
+    final c = Completer<void>();
+    _waiting.add(c);
+    return c.future;
+  }
+
+  void release() {
+    if (_waiting.isNotEmpty) {
+      _waiting.removeAt(0).complete();
+    } else {
+      _free++;
+    }
+  }
+}
 
 String _reason(Object e) => switch (e) {
       SocketException(:final osError?) => osError.message.trim(),

@@ -88,6 +88,44 @@ class SelectionStrings {
   String get pasteSingleLine => isRussian ? 'Одной строкой' : 'Single line';
 
   String get pasteConfirm => isRussian ? 'Вставить' : 'Paste';
+
+  String get trailingEnterTitle =>
+      isRussian ? 'Вставить с переводом строки?' : 'Paste with a line break?';
+
+  String get trailingEnterDesc => isRussian
+      ? 'Текст заканчивается переводом строки: команда выполнится сразу после вставки.'
+      : 'The text ends with a line break: the command will run right after pasting.';
+}
+
+/// Что именно будет вставлено в терминал.
+class PastePlan {
+  PastePlan(String text)
+      : lines = text.split(RegExp(r'\r\n|\r|\n')),
+        hasLineBreaks = text.contains(RegExp(r'[\r\n]'));
+
+  /// Строки текста (CR, LF и CRLF - всё разделители, как их видит shell).
+  final List<String> lines;
+
+  /// Есть ли в тексте символы, которые shell выполнит как Enter.
+  /// Именно это решает, нужно ли подтверждение, - а не число строк после
+  /// обрезки: `command\n` и `a\rb` тоже выполняются сразу.
+  final bool hasLineBreaks;
+
+  /// Строки без пустых хвостов - для предпросмотра.
+  List<String> get visibleLines {
+    final l = [...lines];
+    while (l.length > 1 && l.last.trim().isEmpty) {
+      l.removeLast();
+    }
+    return l;
+  }
+
+  /// Только один перевод строки, в самом конце.
+  bool get onlyTrailingEnter => visibleLines.length == 1 && hasLineBreaks;
+
+  /// «Одной строкой»: без единого Enter.
+  String get singleLine =>
+      lines.map((l) => l.trim()).where((l) => l.isNotEmpty).join(' ');
 }
 
 /// Контекстное всплывающее меню в стиле keyboard.

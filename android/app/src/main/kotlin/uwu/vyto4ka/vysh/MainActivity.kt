@@ -1,57 +1,42 @@
 package uwu.vyto4ka.vysh
 
+import android.Manifest
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Environment
 import android.os.Build
-import android.os.PowerManager
 import android.provider.DocumentsContract
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val channelName = "uwu.vyto4ka.vysh/wakelock"
     private val iconChannelName = "uwu.vyto4ka.vysh/app_icon"
     private val filesChannelName = "uwu.vyto4ka.vysh/local_files"
-    private var wakeLock: PowerManager.WakeLock? = null
+
+    /// Сохранения в Download, ждущие ответа на запрос разрешения (Android 9-).
+    private val pendingSaves = mutableListOf<Pair<MethodCall, MethodChannel.Result>>()
+    private val storagePermissionRequest = 4041
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Канал прежнего названия: wake lock теперь держит сам сервис,
+        // Dart только сообщает, есть ли живые сессии.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "acquire" -> {
-                    try {
-                        val title = call.argument<String>("title") ?: "SSH подключен"
-                        if (wakeLock == null) {
-                            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-                            wakeLock = powerManager.newWakeLock(
-                                PowerManager.PARTIAL_WAKE_LOCK,
-                                "vysh:ssh_session"
-                            ).apply { setReferenceCounted(false) }
-                        }
-                        wakeLock?.acquire(60 * 60 * 1000L) // 1 hour max
-                        SshForegroundService.start(this, title)
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("WAKELOCK_ERROR", e.message, null)
-                    }
+                    val title = call.argument<String>("title") ?: "SSH подключен"
+                    result.success(SshForegroundService.start(this, title))
                 }
                 "release" -> {
-                    try {
-                        if (wakeLock?.isHeld == true) {
-                            wakeLock?.release()
-                        }
-                        SshForegroundService.stop(this)
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("WAKELOCK_ERROR", e.message, null)
-                    }
+                    SshForegroundService.stop(this)
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }
@@ -60,17 +45,30 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, filesChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "saveToDownloads" -> {
+                    if (needsStoragePermission()) {
+                        // Android 9 и ниже: без разрешения в общую Download не записать.
+                        pendingSaves.add(call to result)
+                        if (pendingSaves.size == 1) {
+                            requestPermissions(
+                                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                                storagePermissionRequest
+                            )
+                        }
+                    } else {
+                        handleSave(call, result)
+                    }
+                }
+                "shareText" -> {
                     try {
-                        // Файл уже скачан во временный путь - переносим его в
-                        // общую Download через MediaStore. Разрешений не нужно.
-                        val tempPath = call.argument<String>("tempPath") ?: ""
-                        val name = call.argument<String>("name") ?: ""
-                        val mimeType = call.argument<String>("mimeType")
-                            ?: "application/octet-stream"
-                        val uri = saveToDownloads(tempPath, name, mimeType)
-                        result.success(uri?.toString())
+                        // Системное меню «Поделиться» для выделенного текста.
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, call.argument<String>("text") ?: "")
+                        }
+                        startActivity(Intent.createChooser(send, null))
+                        result.success(true)
                     } catch (e: Exception) {
-                        result.error("SAVE_ERROR", e.message, null)
+                        result.error("SHARE_ERROR", e.message, null)
                     }
                 }
                 "revealPath" -> {
@@ -160,47 +158,117 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
-        try {
-            if (wakeLock?.isHeld == true) {
-                wakeLock?.release()
-            }
-            SshForegroundService.stop(this)
-        } catch (_: Exception) {}
+        // SSH-сессии живут в Dart-движке этой Activity и погибают вместе с ней:
+        // держать процесс дальше незачем.
+        SshForegroundService.stop(this)
+        val waiting = pendingSaves.toList()
+        pendingSaves.clear()
+        for ((_, result) in waiting) {
+            result.error("SAVE_ERROR", "Приложение закрыто", null)
+        }
         super.onDestroy()
     }
 
     // ─── Скачивание в общую Download ────────────────────────────────
 
+    private fun needsStoragePermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+            PackageManager.PERMISSION_GRANTED
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != storagePermissionRequest) return
+        val granted = grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        val waiting = pendingSaves.toList()
+        pendingSaves.clear()
+        for ((call, result) in waiting) {
+            if (granted) {
+                handleSave(call, result)
+            } else {
+                result.error(
+                    "PERMISSION_DENIED",
+                    "Нет разрешения на запись в папку Download",
+                    null
+                )
+            }
+        }
+    }
+
+    private fun handleSave(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            // Файл уже скачан во временный путь - переносим его в общую Download.
+            val tempPath = call.argument<String>("tempPath") ?: ""
+            val name = call.argument<String>("name") ?: ""
+            val subDir = call.argument<String>("subDir") ?: ""
+            val mimeType = call.argument<String>("mimeType")
+                ?: "application/octet-stream"
+            result.success(saveToDownloads(tempPath, name, subDir, mimeType).toString())
+        } catch (e: Exception) {
+            result.error("SAVE_ERROR", e.message ?: e.toString(), null)
+        }
+    }
+
     /// Переносит скачанный во временный путь файл в общую папку Download.
+    /// [subDir] - относительный путь внутри Download (структура скачанной папки).
     /// Android 10+: MediaStore.Downloads - разрешений не нужно, файл виден
     /// всем приложениям и в системном экране «Загрузки».
     /// Старые Android: прямой перенос в /storage/emulated/0/Download
-    /// (там работают классические права WRITE_EXTERNAL_STORAGE).
-    private fun saveToDownloads(tempPath: String, name: String, mimeType: String): Uri? {
+    /// (нужно разрешение WRITE_EXTERNAL_STORAGE, его запрашиваем заранее).
+    private fun saveToDownloads(tempPath: String, name: String, subDir: String, mimeType: String): Uri {
         val temp = java.io.File(tempPath)
         if (!temp.exists()) throw java.io.FileNotFoundException(tempPath)
+        val cleanSub = subDir.split('/', '\\')
+            .filter { it.isNotEmpty() && it != "." && it != ".." }
+            .joinToString("/")
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
                 put(android.provider.MediaStore.Downloads.MIME_TYPE, mimeType)
+                put(
+                    android.provider.MediaStore.Downloads.RELATIVE_PATH,
+                    if (cleanSub.isEmpty()) Environment.DIRECTORY_DOWNLOADS
+                    else "${Environment.DIRECTORY_DOWNLOADS}/$cleanSub"
+                )
+                // Пока копируем, файл скрыт от других приложений.
+                put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
                 // Уже занятое имя MediaStore сам переименует в «name (1).ext».
             }
             val resolver = contentResolver
             val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                ?: throw IllegalStateException("MediaStore insert failed")
-            resolver.openOutputStream(uri)?.use { out ->
-                temp.inputStream().use { it.copyTo(out) }
-            } ?: throw IllegalStateException("MediaStore stream failed")
+                ?: throw IllegalStateException("MediaStore не создал запись")
+            try {
+                resolver.openOutputStream(uri)?.use { out ->
+                    temp.inputStream().use { it.copyTo(out) }
+                } ?: throw IllegalStateException("MediaStore не открыл файл на запись")
+                val done = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
+                }
+                resolver.update(uri, done, null, null)
+            } catch (e: Exception) {
+                // Недописанную запись не оставляем.
+                try { resolver.delete(uri, null, null) } catch (_: Exception) {}
+                throw e
+            }
             temp.delete()
             return uri
         }
 
         // Android 9 и ниже: классическая файловая система.
-        val dir = java.io.File(
+        val root = java.io.File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).path
         )
-        if (!dir.exists()) dir.mkdirs()
+        val dir = if (cleanSub.isEmpty()) root else java.io.File(root, cleanSub)
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw java.io.IOException("Не удалось создать папку ${dir.path}")
+        }
         var target = java.io.File(dir, name)
         var i = 1
         while (target.exists()) {
@@ -210,7 +278,12 @@ class MainActivity : FlutterActivity() {
             target = java.io.File(dir, "$base ($i)$ext")
             i++
         }
-        temp.copyTo(target, overwrite = true)
+        try {
+            temp.copyTo(target, overwrite = false)
+        } catch (e: Exception) {
+            target.delete()
+            throw e
+        }
         temp.delete()
         return Uri.fromFile(target)
     }

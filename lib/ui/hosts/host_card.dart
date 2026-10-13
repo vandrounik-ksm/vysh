@@ -191,17 +191,22 @@ class HostCard extends ConsumerWidget {
       menuItem(
         strings.forgetPassword,
         icon: Icons.key_off_outlined,
-        onPressed: () {
-          ref.read(hostsProvider.notifier).forgetSecrets(host.id);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                strings.isRu
-                    ? 'Сохранённый пароль для «${host.title}» удалён'
-                    : 'Saved password for «${host.title}» removed',
-              ),
-            ),
-          );
+        onPressed: () async {
+          final messenger = ScaffoldMessenger.of(context);
+          // Открытые вкладки тоже забывают пароль, введённый в этой сессии.
+          ref.read(tabsProvider.notifier).forgetSessionPasswords(host.id);
+          String text;
+          try {
+            await ref.read(hostsProvider.notifier).forgetSecrets(host.id);
+            text = strings.isRu
+                ? 'Сохранённый пароль для «${host.title}» удалён'
+                : 'Saved password for «${host.title}» removed';
+          } catch (e) {
+            text = strings.isRu
+                ? 'Не удалось удалить пароль: системное хранилище недоступно ($e)'
+                : 'Could not remove the password: system keyring unavailable ($e)';
+          }
+          messenger.showSnackBar(SnackBar(content: Text(text)));
         },
       ),
       menuDivider(),

@@ -60,7 +60,9 @@ class SshConnectRequest {
     this.interactive,
     this.onBanner,
     this.onLog,
+    this.cancelled,
     this.timeout = const Duration(seconds: 10),
+    this.authTimeout = const Duration(seconds: 30),
     this.keepAliveInterval = const Duration(seconds: 60),
   });
 
@@ -83,7 +85,17 @@ class SshConnectRequest {
 
   /// Журнал подключения: шаг и признак «отладочная строка».
   final void Function(String line, bool debug)? onLog;
+
+  /// Завершается, когда попытку нужно прервать (закрыли вкладку):
+  /// коннектор сразу закрывает сокет и бросает [SshFailureKind.cancelled].
+  final Future<void>? cancelled;
+
+  /// Таймаут сети: DNS и TCP-подключение к одному адресу.
   final Duration timeout;
+
+  /// Сколько ждать сервер на этапах обмена ключами и входа. Время, пока
+  /// пользователь вводит пароль или смотрит на ключ сервера, не считается.
+  final Duration authTimeout;
   final Duration keepAliveInterval;
 }
 

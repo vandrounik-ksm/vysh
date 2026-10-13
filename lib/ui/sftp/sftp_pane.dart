@@ -80,19 +80,25 @@ class _SftpPaneState extends ConsumerState<SftpPane> {
   Future<SftpSession> _sftp() =>
       ref.read(tabsProvider.notifier).sessionOf(widget.tab.id)!.sftp();
 
+  /// Номер последнего запроса списка: ответ на устаревший запрос (папку
+  /// уже сменили) не должен перезаписать текущую.
+  int _request = 0;
+
   Future<void> _init() async {
     if (_error != null) {
       ref.read(tabsProvider.notifier).sessionOf(widget.tab.id)?.resetSftp();
     }
+    final request = ++_request;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final home = await (await _sftp()).home();
+      if (!mounted || request != _request) return;
       await _open(home);
     } catch (e) {
-      if (mounted) {
+      if (mounted && request == _request) {
         setState(() {
           _loading = false;
           _error = '$e';
@@ -102,6 +108,7 @@ class _SftpPaneState extends ConsumerState<SftpPane> {
   }
 
   Future<void> _open(String path) async {
+    final request = ++_request;
     setState(() {
       _loading = true;
       _error = null;
@@ -112,7 +119,7 @@ class _SftpPaneState extends ConsumerState<SftpPane> {
         if (a.isDir != b.isDir) return a.isDir ? -1 : 1;
         return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
-      if (!mounted) return;
+      if (!mounted || request != _request) return;
       setState(() {
         _cwd = path;
         _pathField.text = path;
@@ -122,7 +129,7 @@ class _SftpPaneState extends ConsumerState<SftpPane> {
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || request != _request) return;
       setState(() {
         _loading = false;
         _error = '$e';
@@ -177,9 +184,15 @@ class _SftpPaneState extends ConsumerState<SftpPane> {
   Future<void> _upload(List<String> paths) async {
     final target = _cwd!;
     await _run(
-      () async => _actions?.uploadPaths(paths, target, onFileDone: () {
-        if (mounted && _cwd == target) _refresh();
-      }),
+      () async => _actions?.uploadPaths(
+        paths,
+        target,
+        onFileDone: () {
+          if (mounted && _cwd == target) _refresh();
+        },
+        confirmOverwrite: (names) async =>
+            mounted ? askOverwrite(context, names) : null,
+      ),
       refresh: true,
     );
   }
@@ -207,7 +220,8 @@ class _SftpPaneState extends ConsumerState<SftpPane> {
   Future<void> _openLocally(RemoteEntry e) async {
     await _run(
       () async => _actions?.openLocally(e,
-          onUploaded: (name) => _toast('«$name» сохранён на сервере')),
+          onUploaded: (name) => _toast('«$name» сохранён на сервере'),
+          onError: (message) => _toast(message, error: true)),
       refresh: false,
     );
   }

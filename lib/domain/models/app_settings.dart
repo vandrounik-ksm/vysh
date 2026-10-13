@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../infra/platform/desktop_env.dart';
+import 'json_read.dart';
 
 /// Что делает правый клик (и тап двумя пальцами по тачпаду) в терминале.
 enum RightClickAction {
@@ -272,60 +273,60 @@ class AppSettings {
           (m) => m.name == json['themeMode'],
           orElse: () => ThemeMode.system,
         ),
-        seedColor: (json['seedColor'] as num?)?.toInt() ?? 0xFF6750A4,
-        compact: json['compact'] as bool? ?? false,
-        terminalFontSize: (json['rememberTerminalFontSize'] as bool? ?? true)
-            ? ((json['terminalFontSize'] as num?)?.toDouble() ?? 14)
+        seedColor: json.integer('seedColor') ?? 0xFF6750A4,
+        compact: json.boolean('compact') ?? false,
+        terminalFontSize: (json.boolean('rememberTerminalFontSize') ?? true)
+            ? (json.dbl('terminalFontSize') ?? 14)
                 .clamp(8, 32)
                 .toDouble()
             : 14,
         rememberTerminalFontSize:
-            json['rememberTerminalFontSize'] as bool? ?? true,
-        copyOnSelect: json['copyOnSelect'] as bool? ?? false,
-        downloadsDir: json['downloadsDir'] as String? ?? '',
-        pingHosts: json['pingHosts'] as bool? ?? true,
+            json.boolean('rememberTerminalFontSize') ?? true,
+        copyOnSelect: json.boolean('copyOnSelect') ?? false,
+        downloadsDir: json.str('downloadsDir') ?? '',
+        pingHosts: json.boolean('pingHosts') ?? true,
         rightClick: RightClickAction.values.firstWhere(
           (a) => a.name == json['rightClick'],
           orElse: () => RightClickAction.menu,
         ),
-        middleClickPaste: json['middleClickPaste'] as bool? ?? false,
-        ctrlVPaste: json['ctrlVPaste'] as bool? ?? false,
-        confirmMultilinePaste: json['confirmMultilinePaste'] as bool? ?? true,
+        middleClickPaste: json.boolean('middleClickPaste') ?? false,
+        ctrlVPaste: json.boolean('ctrlVPaste') ?? false,
+        confirmMultilinePaste: json.boolean('confirmMultilinePaste') ?? true,
         colorSource: ColorSource.values.firstWhere(
           (c) => c.name == json['colorSource'],
           orElse: () => ColorSource.preset,
         ),
-        dotsPath: json['dotsPath'] as String? ?? '',
+        dotsPath: json.str('dotsPath') ?? '',
         titleBarMode: TitleBarMode.values.firstWhere(
           (m) => m.name == json['titleBarMode'],
           orElse: () => TitleBarMode.auto,
         ),
-        keepAliveSeconds: (json['keepAliveSeconds'] as num?)?.toInt() ?? 60,
-        appIcon: (json['appIcon'] as String?) ?? 'monet',
-        showAccessoryBar: json['showAccessoryBar'] as bool? ?? true,
+        keepAliveSeconds: json.integer('keepAliveSeconds') ?? 60,
+        appIcon: json.str('appIcon') ?? 'monet',
+        showAccessoryBar: json.boolean('showAccessoryBar') ?? true,
         language: DesktopEnv.isMobile
             ? AppLanguage.auto
             : AppLanguage.values.firstWhere(
                 (l) => l.name == json['language'],
                 orElse: () => AppLanguage.auto,
               ),
-        scrollbackLines: ((json['scrollbackLines'] as num?)?.toInt() ?? 10000)
+        scrollbackLines: (json.integer('scrollbackLines') ?? 10000)
             .clamp(500, maxScrollback)
             .toInt(),
-        pingIntervalSec: ((json['pingIntervalSec'] as num?)?.toInt() ?? 30)
+        pingIntervalSec: (json.integer('pingIntervalSec') ?? 30)
             .clamp(5, 3600)
             .toInt(),
-        pingOnlyVisible: json['pingOnlyVisible'] as bool? ?? true,
-        colorPollSec: ((json['colorPollSec'] as num?)?.toInt() ?? 60)
+        pingOnlyVisible: json.boolean('pingOnlyVisible') ?? true,
+        colorPollSec: (json.integer('colorPollSec') ?? 60)
             .clamp(0, 3600)
             .toInt(),
-        pauseHiddenTabs: json['pauseHiddenTabs'] as bool? ?? true,
+        pauseHiddenTabs: json.boolean('pauseHiddenTabs') ?? true,
         renderer: json['renderer'] == 'impeller'
             ? Renderer.impeller
             : Renderer.skia,
-        catppuccinFlavor: json['catppuccinFlavor'] as String? ?? 'mocha',
-        catppuccinAccent: json['catppuccinAccent'] as String? ?? 'mauve',
-        serverStats: json['serverStats'] as bool? ?? true,
+        catppuccinFlavor: json.str('catppuccinFlavor') ?? 'mocha',
+        catppuccinAccent: json.str('catppuccinAccent') ?? 'mauve',
+        serverStats: json.boolean('serverStats') ?? true,
       );
 
   /// Верхний предел истории: xterm2 сразу резервирует список на столько строк.

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../infra/storage/json_store.dart';
+import '../models/json_read.dart';
 
 class KnownHostKey {
   const KnownHostKey({required this.type, required this.fingerprint, required this.addedAt});
@@ -16,9 +17,9 @@ class KnownHostKey {
       };
 
   factory KnownHostKey.fromJson(Map<String, Object?> j) => KnownHostKey(
-        type: j['type'] as String? ?? '',
-        fingerprint: j['fingerprint'] as String? ?? '',
-        addedAt: DateTime.tryParse(j['addedAt'] as String? ?? '') ?? DateTime.now(),
+        type: j.str('type') ?? '',
+        fingerprint: j.str('fingerprint') ?? '',
+        addedAt: DateTime.tryParse(j.str('addedAt') ?? '') ?? DateTime.now(),
       );
 }
 

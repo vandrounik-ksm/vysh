@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/services/settings_controller.dart';
+import '../../domain/services/tabs_controller.dart';
 import '../../infra/platform/desktop_env.dart';
 
 /// Раздел главной вкладки: 0 - хосты, 1 - настройки.
@@ -26,7 +27,14 @@ final sftpPaneProvider = NotifierProvider<SftpPaneState, Set<String>>(SftpPaneSt
 
 class SftpPaneState extends Notifier<Set<String>> {
   @override
-  Set<String> build() => const {};
+  Set<String> build() {
+    // Закрытые вкладки забываем, чтобы набор не рос всю жизнь приложения.
+    ref.listen(tabsProvider, (_, tabs) {
+      final alive = tabs.tabs.map((t) => t.id).toSet();
+      if (!alive.containsAll(state)) state = state.where(alive.contains).toSet();
+    });
+    return const {};
+  }
 
   void toggle(String tabId) => state =
       state.contains(tabId) ? ({...state}..remove(tabId)) : {...state, tabId};

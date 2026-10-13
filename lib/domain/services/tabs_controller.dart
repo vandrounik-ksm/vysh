@@ -80,6 +80,13 @@ class TabsController extends Notifier<TabsState> {
     session.connect();
   }
 
+  /// Открытые вкладки хоста забывают пароль, введённый в сессии.
+  void forgetSessionPasswords(String hostId) {
+    for (final s in _sessions.values) {
+      if (s.host.id == hostId) s.forgetPassword();
+    }
+  }
+
   void _setStatus(String id, SessionStatus status) {
     if (!state.tabs.any((t) => t.id == id)) return;
     final nextTabs = [for (final t in state.tabs) t.id == id ? t.copyWith(status: status) : t];
@@ -109,7 +116,7 @@ class TabsController extends Notifier<TabsState> {
   void close(String id) {
     final index = state.tabs.indexWhere((t) => t.id == id);
     if (index < 0) return;
-    ref.read(transferQueueProvider.notifier).cancelAllForTab(id);
+    ref.read(transferQueueProvider.notifier).closeTab(id);
     _sessions.remove(id)?.dispose();
     final tabs = [...state.tabs]..removeAt(index);
     var active = state.active;

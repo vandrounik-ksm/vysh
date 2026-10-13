@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
@@ -11,6 +12,9 @@ class DartSsh2Sftp implements SftpSession {
   DartSsh2Sftp(this._c);
 
   final SftpClient _c;
+
+  /// Сколько ждать следующую порцию данных при скачивании.
+  static const _stallTimeout = Duration(seconds: 60);
 
   @override
   Future<String> home() => _guard(() => _c.absolute('.'));
@@ -83,20 +87,59 @@ class DartSsh2Sftp implements SftpSession {
     required ProgressCallback onProgress,
   }) =>
       _guard(() async {
+        if (cancel.isCancelled) throw const TransferCancelled();
         final file = await _c.open(remotePath);
-        final sink = local.openWrite();
-        var done = 0;
+        RandomAccessFile? out;
+        StreamSubscription<Uint8List>? sub;
+        Timer? stall;
+        final finished = Completer<void>();
+        void fail(Object e) {
+          if (!finished.isCompleted) finished.completeError(e);
+        }
+
         try {
-          await for (final chunk in file.read()) {
-            if (cancel.isCancelled) throw const TransferCancelled();
-            sink.add(chunk);
-            done += chunk.length;
-            onProgress(done);
+          final o = out = await local.open(mode: FileMode.write);
+          void resetStall() {
+            stall?.cancel();
+            stall = Timer(
+              _stallTimeout,
+              () => fail(SftpFailure(
+                  'Сервер перестал присылать данные (${_stallTimeout.inSeconds} с без ответа)')),
+            );
           }
+
+          // Отмена срабатывает сразу, а не «со следующей порцией данных»,
+          // которой у зависшего канала может и не быть.
+          cancel.onCancel(() => fail(const TransferCancelled()));
+          resetStall();
+          var bytes = 0;
+          sub = file.read().listen(
+            (chunk) {
+              // Пока порция пишется на диск, следующие не принимаем:
+              // медленный диск не копит весь файл в памяти.
+              sub!.pause();
+              o.writeFrom(chunk).then((_) {
+                bytes += chunk.length;
+                onProgress(bytes);
+                resetStall();
+                if (!finished.isCompleted) sub!.resume();
+              }, onError: fail);
+            },
+            onError: fail,
+            onDone: () {
+              if (!finished.isCompleted) finished.complete();
+            },
+            cancelOnError: true,
+          );
+          await finished.future;
         } finally {
-          await sink.flush();
-          await sink.close();
-          await file.close();
+          stall?.cancel();
+          // Отмена чтения ждёт ответа сервера на текущий запрос - не блокируемся.
+          unawaited(sub?.cancel().catchError((_) {}));
+          try {
+            await out?.close();
+          } catch (_) {}
+          await _closeQuietly(file);
         }
       });
 
@@ -108,22 +151,126 @@ class DartSsh2Sftp implements SftpSession {
     required ProgressCallback onProgress,
   }) =>
       _guard(() async {
-        final file = await _c.open(
-          remotePath,
-          mode: SftpFileOpenMode.create | SftpFileOpenMode.write | SftpFileOpenMode.truncate,
+        if (cancel.isCancelled) throw const TransferCancelled();
+        SftpFileAttrs? existing;
+        try {
+          existing = await _c.stat(remotePath, followLink: false);
+        } on SftpStatusError catch (e) {
+          if (e.code != SftpStatusCode.noSuchFile) rethrow;
+        }
+        if (existing != null && existing.isDirectory) {
+          throw SftpFailure('$remotePath - это папка', code: SftpFailureCode.exists);
+        }
+
+        // Симлинк заменять нельзя (rename превратил бы его в обычный файл) -
+        // пишем прямо в файл, на который он указывает.
+        if (existing != null && existing.isSymbolicLink) {
+          await _writeTo(remotePath, local, cancel, onProgress, truncate: true);
+          return;
+        }
+
+        final tmp = remoteJoin(
+          remoteParent(remotePath),
+          '.${remoteBasename(remotePath)}.vysh-${_rand()}.part',
         );
         try {
-          final stream = local
-              .openRead()
-              .map((c) => c is Uint8List ? c : Uint8List.fromList(c));
-          final writer = file.write(stream, onProgress: onProgress);
-          cancel.onCancel(() => writer.abort());
-          await writer.done;
+          await _writeTo(tmp, local, cancel, onProgress, exclusive: true);
+        } on SftpStatusError catch (e) {
+          if (e.code == SftpStatusCode.permissionDenied && existing != null) {
+            // В папку писать нельзя, а в сам файл можно (например, общий
+            // файл в чужой папке). Временный файл не создать - пишем напрямую.
+            await _removeQuietly(tmp);
+            await _writeTo(remotePath, local, cancel, onProgress, truncate: true);
+            return;
+          }
+          await _removeQuietly(tmp);
+          rethrow;
+        } catch (_) {
+          await _removeQuietly(tmp);
+          rethrow;
+        }
+
+        try {
+          final mode = existing?.mode?.value;
+          if (mode != null) {
+            try {
+              await _c.setStat(tmp, SftpFileAttrs(mode: SftpFileMode.value(mode & 0xFFF)));
+            } catch (_) {
+              // Права - не повод терять загруженное.
+            }
+          }
           if (cancel.isCancelled) throw const TransferCancelled();
-        } finally {
-          await file.close();
+          await _replace(tmp, remotePath, existed: existing != null);
+        } catch (_) {
+          await _removeQuietly(tmp);
+          rethrow;
         }
       });
+
+  Future<void> _writeTo(
+    String path,
+    File local,
+    CancelToken cancel,
+    ProgressCallback onProgress, {
+    bool truncate = false,
+    bool exclusive = false,
+  }) async {
+    var mode = SftpFileOpenMode.create | SftpFileOpenMode.write;
+    if (truncate) mode = mode | SftpFileOpenMode.truncate;
+    if (exclusive) mode = mode | SftpFileOpenMode.exclusive;
+    final file = await _c.open(path, mode: mode);
+    try {
+      final stream = local
+          .openRead()
+          .map((c) => c is Uint8List ? c : Uint8List.fromList(c));
+      final writer = file.write(stream, onProgress: onProgress);
+      cancel.onCancel(() => writer.abort());
+      await writer.done;
+      if (cancel.isCancelled) throw const TransferCancelled();
+    } finally {
+      await _closeQuietly(file);
+    }
+  }
+
+  /// Поставить [from] на место [to]. С posix-rename (OpenSSH) это одна
+  /// атомарная операция; без него - старый файл отодвигается в сторону и
+  /// возвращается обратно, если замена не удалась.
+  Future<void> _replace(String from, String to, {required bool existed}) async {
+    try {
+      await _c.rename(from, to);
+      return;
+    } on SftpStatusError {
+      if (!existed) rethrow;
+    }
+    final aside = '$to.vysh-old-${_rand()}';
+    await _c.rename(to, aside);
+    try {
+      await _c.rename(from, to);
+    } catch (_) {
+      try {
+        await _c.rename(aside, to);
+      } catch (_) {}
+      rethrow;
+    }
+    await _removeQuietly(aside);
+  }
+
+  Future<void> _removeQuietly(String path) async {
+    try {
+      await _c.remove(path).timeout(const Duration(seconds: 5));
+    } catch (_) {}
+  }
+
+  static Future<void> _closeQuietly(SftpFile file) async {
+    try {
+      await file.close().timeout(const Duration(seconds: 5));
+    } catch (_) {}
+  }
+
+  static String _rand() {
+    final r = Random.secure();
+    return List.generate(4, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+  }
 
   @override
   Future<void> close() async {
@@ -138,15 +285,25 @@ class DartSsh2Sftp implements SftpSession {
       return await body();
     } on TransferCancelled {
       rethrow;
+    } on SftpFailure {
+      rethrow;
     } on SftpStatusError catch (e) {
-      throw SftpFailure(switch (e.code) {
-        2 => 'Нет такого файла или папки',
-        3 => 'Нет прав доступа',
-        4 => 'Операция не выполнена${e.message.isEmpty ? '' : ': ${e.message}'}',
-        8 => 'Сервер не поддерживает эту операцию',
-        11 => 'Файл уже существует',
-        _ => e.message.isEmpty ? 'Ошибка SFTP (${e.code})' : e.message,
-      });
+      throw SftpFailure(
+        switch (e.code) {
+          2 => 'Нет такого файла или папки',
+          3 => 'Нет прав доступа',
+          4 => 'Операция не выполнена${e.message.isEmpty ? '' : ': ${e.message}'}',
+          8 => 'Сервер не поддерживает эту операцию',
+          11 => 'Файл уже существует',
+          _ => e.message.isEmpty ? 'Ошибка SFTP (${e.code})' : e.message,
+        },
+        code: switch (e.code) {
+          2 => SftpFailureCode.noSuchFile,
+          3 => SftpFailureCode.permissionDenied,
+          11 => SftpFailureCode.exists,
+          _ => SftpFailureCode.other,
+        },
+      );
     } on SftpError catch (e) {
       throw SftpFailure(e.message);
     } on FileSystemException catch (e) {

@@ -41,6 +41,10 @@ class AppPaths {
 
   static File file(String name) => File(_join(configDir.path, name));
 
+  /// Своя папка профиля для тестов.
+  @visibleForTesting
+  static set configDirForTest(Directory dir) => _configDir = dir;
+
   static Future<String> _resolve() async {
     if (kIsWeb) return 'vysh';
     try {

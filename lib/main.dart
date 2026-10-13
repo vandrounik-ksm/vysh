@@ -29,10 +29,14 @@ Future<void> main() async {
     final settings = raw is Map<String, Object?> ? AppSettings.fromJson(raw) : const AppSettings();
     final custom = DesktopEnv.useCustomTitleBar(settings.titleBarMode);
 
-    // Движок уже выбран нативным кодом по этой же настройке - запоминаем,
-    // чтобы настройки могли подсказать «нужен перезапуск».
-    startupRenderer = settings.renderer;
-    if (settings.renderer == Renderer.skia) {
+    // Движок уже выбран нативным кодом и передан в VYSH_RENDERER - запоминаем
+    // фактический, чтобы настройки могли подсказать «нужен перезапуск».
+    startupRenderer = switch (Platform.environment['VYSH_RENDERER']) {
+      'impeller' => Renderer.impeller,
+      'skia' => Renderer.skia,
+      _ => settings.renderer,
+    };
+    if (startupRenderer == Renderer.skia) {
       // Кэш текстур Skia по умолчанию растёт до 48 байт на пиксель окна:
       // для развёрнутого окна на большом мониторе это сотни мегабайт.
       // Интерфейсу vysh с запасом хватает 64 МБ.

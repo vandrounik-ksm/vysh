@@ -1,13 +1,21 @@
 import 'dart:async';
 import 'dart:io';
 
+import '../../infra/platform/desktop_env.dart';
 import '../../infra/platform/local_files.dart';
 import '../ports/sftp.dart';
 import 'terminal_session.dart';
 import 'transfer_queue.dart';
 
+/// Ответ на вопрос о файлах, которые уже есть на сервере:
+/// true - заменить, false - пропустить их, null - отменить загрузку.
+typedef ConfirmOverwrite = Future<bool?> Function(List<String> names);
+
 /// Высокоуровневые SFTP-действия вкладки: загрузка файлов и папок,
 /// скачивание, «открыть локально» с автозагрузкой изменений.
+///
+/// Методы возвращаются, когда задачи поставлены в очередь; результат самих
+/// передач виден в очереди (и в колбэках onFileDone/onUploaded).
 class SftpActions {
   SftpActions({
     required this.tabId,
@@ -26,12 +34,38 @@ class SftpActions {
   // ─── Загрузка на сервер ───────────────────────────────────────────
 
   /// Загрузить локальные файлы и папки (рекурсивно) в [remoteDir].
+  /// Если файлы с такими именами уже есть, спрашивает [confirmOverwrite]
+  /// (без него - заменяет). Папки сливаются с существующими.
   Future<void> uploadPaths(List<String> localPaths, String remoteDir,
-      {void Function()? onAllQueued, void Function()? onFileDone}) async {
+      {void Function()? onAllQueued,
+      void Function()? onFileDone,
+      ConfirmOverwrite? confirmOverwrite}) async {
     final sftp = await _sftp;
+
+    final items = <(String path, String name, FileSystemEntityType type)>[];
     for (final path in localPaths) {
-      final type = await FileSystemEntity.type(path);
-      final name = path.split(RegExp(r'[\\/]')).where((s) => s.isNotEmpty).last;
+      final parts = path.split(RegExp(r'[\\/]')).where((s) => s.isNotEmpty);
+      if (parts.isEmpty) continue;
+      items.add((path, parts.last, await FileSystemEntity.type(path)));
+    }
+
+    // Существующие файлы на сервере - перезапись только с согласия.
+    var skip = <String>{};
+    if (confirmOverwrite != null) {
+      final existing = {for (final e in await sftp.list(remoteDir)) e.name: e};
+      final conflicts = [
+        for (final (_, name, type) in items)
+          if (type == FileSystemEntityType.file && existing[name]?.isDir == false) name,
+      ];
+      if (conflicts.isNotEmpty) {
+        final answer = await confirmOverwrite(conflicts);
+        if (answer == null) return;
+        if (!answer) skip = conflicts.toSet();
+      }
+    }
+
+    for (final (path, name, type) in items) {
+      if (skip.contains(name)) continue;
       if (type == FileSystemEntityType.directory) {
         await _uploadDir(sftp, Directory(path), remoteJoin(remoteDir, name), onFileDone);
       } else if (type == FileSystemEntityType.file) {
@@ -55,12 +89,16 @@ class SftpActions {
   }
 
   Future<void> _mkdirIfMissing(SftpSession sftp, String path) async {
+    final RemoteEntry e;
     try {
-      final e = await sftp.stat(path);
-      if (!e.isDir) throw SftpFailure('$path существует и это не папка');
-    } on SftpFailure catch (e) {
-      if (e.message.contains('не папка')) rethrow;
+      e = await sftp.stat(path);
+    } on SftpFailure catch (f) {
+      if (f.code != SftpFailureCode.noSuchFile) rethrow;
       await sftp.mkdir(path);
+      return;
+    }
+    if (!e.isDir) {
+      throw SftpFailure('$path существует и это не папка', code: SftpFailureCode.notADirectory);
     }
   }
 
@@ -92,27 +130,49 @@ class SftpActions {
       final local = LocalFiles.uniquePath(dir, e.name);
       first ??= local;
       if (e.isDir) {
-        await _downloadDir(sftp, e.path, Directory(local));
+        try {
+          final folder = Directory(local);
+          await _downloadDir(sftp, e.path, folder,
+              subDir: folder.path.split(RegExp(r'[\\/]')).last);
+        } finally {
+          LocalFiles.releasePath(local);
+        }
       } else {
-        _enqueueDownload(sftp, e, File(local));
+        _enqueueDownload(sftp, e, File(local), publishTo: '');
       }
     }
     return first;
   }
 
-  Future<void> _downloadDir(SftpSession sftp, String remote, Directory local) async {
+  Future<void> _downloadDir(SftpSession sftp, String remote, Directory local,
+      {required String subDir}) async {
     await local.create(recursive: true);
     for (final e in await sftp.list(remote)) {
-      final target = LocalFiles.join(local.path, e.name);
+      // Имена с сервера могут совпасть после очистки (`a:b` и `a_b` на
+      // Windows) - поэтому тоже через uniquePath.
+      final target = LocalFiles.uniquePath(local.path, e.name);
+      final childName = target.split(RegExp(r'[\\/]')).last;
       if (e.isDir && !e.isLink) {
-        await _downloadDir(sftp, e.path, Directory(target));
+        try {
+          await _downloadDir(sftp, e.path, Directory(target), subDir: '$subDir/$childName');
+        } finally {
+          LocalFiles.releasePath(target);
+        }
       } else if (!e.isDir) {
-        _enqueueDownload(sftp, e, File(target));
+        _enqueueDownload(sftp, e, File(target), publishTo: subDir);
+      } else {
+        LocalFiles.releasePath(target);
       }
     }
   }
 
-  String _enqueueDownload(SftpSession sftp, RemoteEntry e, File local, {void Function()? onDone}) {
+  /// [publishTo] - на Android файл после скачивания публикуется в общую
+  /// Download (в эту подпапку); null - не публиковать (локальное редактирование).
+  String _enqueueDownload(SftpSession sftp, RemoteEntry e, File local,
+      {String? publishTo, FutureOr<void> Function()? onDone}) {
+    // Качаем во временный `.part` рядом: под окончательным именем файл
+    // появляется только целым.
+    final part = File('${local.path}.vysh-part');
     return queue.enqueue(
       tabId: tabId,
       direction: TransferDirection.download,
@@ -122,52 +182,135 @@ class SftpActions {
       total: e.size,
       run: (cancel, progress) async {
         try {
-          await sftp.download(e.path, local, cancel: cancel, onProgress: progress);
-          // На Android temp-файл публикуем в общую Download через MediaStore.
-          final published = await LocalFiles.saveToDownloads(local.path, e.name);
-          if (published != null) {
-            queue.updatePath(tabId, local.path, published);
-          }
+          await sftp.download(e.path, part, cancel: cancel, onProgress: progress);
+          if (cancel.isCancelled) throw const TransferCancelled();
+          await part.rename(local.path);
         } catch (_) {
           // Недокачанный файл не оставляем.
           try {
-            if (await local.exists()) await local.delete();
+            if (await part.exists()) await part.delete();
           } catch (_) {}
           rethrow;
         }
+        if (publishTo != null && DesktopEnv.isMobile && Platform.isAndroid) {
+          // На Android файл лежит во временной папке - переносим в общую
+          // Download. Не получилось - это ошибка задачи, а не «готово».
+          final published = await LocalFiles.saveToDownloads(
+            local.path,
+            local.path.split(RegExp(r'[\\/]')).last,
+            subDir: publishTo,
+          );
+          queue.updatePath(tabId, local.path, published);
+        }
       },
       onDone: onDone,
+      onSettled: () => LocalFiles.releasePath(local.path),
     );
   }
 
   // ─── Открыть локально ────────────────────────────────────────────
 
   /// Скачать во временную папку, открыть программой по умолчанию и
-  /// заливать обратно при каждом сохранении. [onUploaded] - уведомление.
-  Future<void> openLocally(RemoteEntry e, {required void Function(String name) onUploaded}) async {
+  /// заливать обратно при каждом сохранении. [onUploaded] - уведомление,
+  /// [onError] - автозагрузка не удалась или остановлена.
+  Future<void> openLocally(
+    RemoteEntry e, {
+    required void Function(String name) onUploaded,
+    required void Function(String message) onError,
+  }) async {
     final sftp = await _sftp;
+    // Автозагрузка привязана к этому серверу: если хост в редакторе
+    // направят на другой адрес, правки туда не уйдут.
+    final target = session.target;
     final dir = await LocalFiles.editTempDir();
-    final local = File(LocalFiles.join(dir.path, e.name));
+    final local = File(LocalFiles.childPath(dir.path, LocalFiles.safeName(e.name)));
 
     _enqueueDownload(sftp, e, local, onDone: () async {
       await LocalFiles.openWithSystem(local.path);
-      var lastModified = await local.lastModified();
-      Timer? debounce;
-      final sub = dir.watch().listen((event) {
-        if (!event.path.endsWith(e.name)) return;
-        debounce?.cancel();
-        debounce = Timer(const Duration(milliseconds: 700), () async {
-          if (!await local.exists()) return;
-          final m = await local.lastModified();
-          if (!m.isAfter(lastModified)) return;
-          lastModified = m;
-          try {
-            final s = await _sftp;
-            _enqueueUpload(s, local, e.path, () => onUploaded(e.name));
-          } catch (_) {}
-        });
-      });
-      session.editWatchers.add(sub);
+      if (session.isDisposed || session.target != target) return;
+      final edit = _LocalEdit(
+        actions: this,
+        entry: e,
+        local: local,
+        dir: dir,
+        target: target,
+        onUploaded: onUploaded,
+        onError: onError,
+      );
+      await edit.start();
+      session.addLocalEdit(edit);
     });
+  }
+}
+
+/// Наблюдение за локальной копией файла и заливка изменений на сервер.
+/// Владеет подпиской и таймером; закрывается вместе с сессией или при
+/// смене цели подключения.
+class _LocalEdit implements LocalEditHandle {
+  _LocalEdit({
+    required this.actions,
+    required this.entry,
+    required this.local,
+    required this.dir,
+    required this.target,
+    required this.onUploaded,
+    required this.onError,
+  });
+
+  final SftpActions actions;
+  final RemoteEntry entry;
+  final File local;
+  final Directory dir;
+  final String target;
+  final void Function(String name) onUploaded;
+  final void Function(String message) onError;
+
+  StreamSubscription<FileSystemEvent>? _sub;
+  Timer? _debounce;
+  late DateTime _lastModified;
+  bool _closed = false;
+
+  String get _fileName => local.path.split(RegExp(r'[\\/]')).last;
+
+  Future<void> start() async {
+    _lastModified = await local.lastModified();
+    _sub = dir.watch().listen((event) {
+      if (_closed || event.path.split(RegExp(r'[\\/]')).last != _fileName) return;
+      _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 700), _check);
+    }, onError: (Object e) {
+      onError('Не удалось следить за изменениями «${entry.name}»: $e');
+      close();
+    });
+  }
+
+  Future<void> _check() async {
+    if (_closed) return;
+    final session = actions.session;
+    if (session.isDisposed || session.target != target) {
+      onError('«${entry.name}»: адрес хоста изменился, автозагрузка остановлена');
+      close();
+      return;
+    }
+    if (!await local.exists()) return;
+    final m = await local.lastModified();
+    if (!m.isAfter(_lastModified)) return;
+    _lastModified = m;
+    try {
+      final sftp = await session.sftp();
+      if (_closed) return;
+      actions._enqueueUpload(sftp, local, entry.path, () => onUploaded(entry.name));
+    } catch (e) {
+      onError('«${entry.name}» не загружен на сервер: $e');
+    }
+  }
+
+  @override
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    _debounce?.cancel();
+    _sub?.cancel();
+    actions.session.removeLocalEdit(this);
   }
 }

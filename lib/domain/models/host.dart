@@ -1,5 +1,9 @@
+import 'json_read.dart';
 import 'dart:math';
 
+/// Способ входа. `agent` - в интерфейсе «Авто»: пока это не ssh-agent, а
+/// стандартные незашифрованные ключи из `~/.ssh`. Имя сохранено ради
+/// совместимости с уже записанными hosts.json (значение `"agent"`).
 enum AuthMethod { password, key, agent }
 
 /// Сохранённый хост. Секретов здесь нет - только ссылки на них.
@@ -77,20 +81,20 @@ class Host {
       };
 
   factory Host.fromJson(Map<String, Object?> json) => Host(
-        id: json['id'] as String? ?? newId(),
-        label: json['label'] as String? ?? '',
-        address: json['address'] as String? ?? '',
-        port: (json['port'] as num?)?.toInt() ?? 22,
-        username: json['username'] as String? ?? 'root',
+        id: json.str('id') ?? newId(),
+        label: json.str('label') ?? '',
+        address: json.str('address') ?? '',
+        port: switch (json.integer('port')) { final p? when p >= 1 && p <= 65535 => p, _ => 22 },
+        username: json.str('username') ?? 'root',
         auth: AuthMethod.values.firstWhere(
           (a) => a.name == json['auth'],
           orElse: () => AuthMethod.password,
         ),
-        keyPath: json['keyPath'] as String?,
-        group: json['group'] as String? ?? '',
-        color: (json['color'] as num?)?.toInt() ?? 0xFF6750A4,
-        lastConnectedAt: DateTime.tryParse(json['lastConnectedAt'] as String? ?? ''),
-        keepAliveSeconds: (json['keepAliveSeconds'] as num?)?.toInt(),
+        keyPath: json.str('keyPath'),
+        group: json.str('group') ?? '',
+        color: json.integer('color') ?? 0xFF6750A4,
+        lastConnectedAt: DateTime.tryParse(json.str('lastConnectedAt') ?? ''),
+        keepAliveSeconds: json.integer('keepAliveSeconds'),
       );
 
   /// Разбор быстрого подключения: `user@host`, `user@host:port`, `host`.
