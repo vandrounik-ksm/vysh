@@ -1,19 +1,17 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../domain/models/app_settings.dart';
-import '../domain/services/external_colors_controller.dart';
-import '../domain/services/monet_colors_provider.dart';
-import '../domain/services/settings_controller.dart';
+import '../infra/platform/capabilities.dart';
+import '../app/settings/app_settings.dart';
+import '../app/controllers/external_colors_controller.dart';
+import '../app/controllers/monet_colors_provider.dart';
+import '../app/controllers/settings_controller.dart';
 import '../infra/platform/desktop_env.dart';
-import '../ui/shell/app_shell.dart';
-import '../ui/shell/ui_state.dart';
-import '../ui/theme/app_theme.dart';
+import 'shell/app_shell.dart';
+import 'shell/ui_state.dart';
+import 'theme/app_theme.dart';
 
 /// Корневой навигатор - через него сессии показывают диалоги
 /// (пароль, ключ сервера) из не-UI кода.
@@ -24,13 +22,20 @@ class VyshApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final s = ref.watch(settingsProvider);
+    // Корень приложения перестраивается только от настроек темы и языка.
+    final s = ref.watch(settingsProvider.select((s) => (
+          colorSource: s.colorSource,
+          seedColor: s.seedColor,
+          themeMode: s.themeMode,
+          compact: s.compact,
+          language: s.language,
+        )));
     final ext = ref.watch(externalColorsProvider);
     final monet = ref.watch(monetColorsProvider).value;
 
     // Переключили режим заголовка - применяем сразу, без перезапуска.
     ref.listen<bool>(customTitleBarProvider, (_, custom) {
-      if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+      if (PlatformCapabilities.desktopWindow) {
         windowManager.setTitleBarStyle(
           custom ? TitleBarStyle.hidden : TitleBarStyle.normal,
           windowButtonVisibility: !custom,

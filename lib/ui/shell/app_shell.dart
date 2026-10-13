@@ -1,19 +1,18 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../domain/models/app_strings.dart';
-import '../../domain/services/settings_controller.dart';
+import '../../infra/platform/capabilities.dart';
+import '../../app/controllers/settings_controller.dart';
+import '../../infra/storage/app_paths.dart';
 import '../../infra/storage/json_store.dart';
-import '../../domain/services/tabs_controller.dart';
+import '../../app/controllers/tabs_controller.dart';
 import '../hosts/host_editor.dart';
 import '../hosts/hosts_page.dart';
 import '../settings/settings_page.dart';
 import '../terminal/session_view.dart';
+import '../widgets/strings_context.dart';
 import 'home_switcher.dart';
 import 'tab_strip.dart';
 import 'ui_state.dart';
@@ -38,6 +37,13 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.initState();
     HardwareKeyboard.instance.addHandler(_onKey);
     JsonStore.failure.addListener(_onSaveFailure);
+    final initError = AppPaths.initError;
+    if (initError != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showError(context.strings.profileUnavailable(initError.path, initError.error));
+      });
+    }
   }
 
   @override
@@ -51,13 +57,15 @@ class _AppShellState extends ConsumerState<AppShell> {
   void _onSaveFailure() {
     final f = JsonStore.failure.value;
     if (f == null || !mounted) return;
-    final strings = AppStrings.of(context, ref.read(settingsProvider).language);
+    _showError(context.strings.saveFailed(f.fileName, f.message));
+  }
+
+  void _showError(String text) {
     final scheme = Theme.of(context).colorScheme;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(strings.saveFailed(f.fileName, f.message),
-          style: TextStyle(color: scheme.onErrorContainer)),
+      content: Text(text, style: TextStyle(color: scheme.onErrorContainer)),
       backgroundColor: scheme.errorContainer,
-      duration: const Duration(seconds: 8),
+      duration: const Duration(seconds: 10),
     ));
   }
 
@@ -143,7 +151,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       );
 
     // Linux без системной рамки: края окна тянем сами.
-    final resizable = !kIsWeb && Platform.isLinux && ref.watch(customTitleBarProvider);
+    final resizable = PlatformCapabilities.selfResizedWindow && ref.watch(customTitleBarProvider);
     return Scaffold(
       body: SafeArea(
         child: resizable ? DragToResizeArea(resizeEdgeSize: 6, child: body) : body,

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vysh/l10n/app_strings.dart';
 import 'package:vysh/domain/services/server_stats.dart';
 
 String sample({required int busy, required int idle, required int rx, required int tx}) => '''
@@ -44,7 +45,7 @@ void main() {
   });
 
   test('форматирование', () {
-    expect(formatBytes(1536, ru: true), '1.5 КБ');
-    expect(formatUptime(const Duration(days: 5, hours: 3), ru: true), '5 д 3 ч');
+    expect(const AppStrings(isRu: true).bytes(1536), '1.5 КБ');
+    expect(const AppStrings(isRu: true).uptime(const Duration(days: 5, hours: 3)), '5 д 3 ч');
   });
 }

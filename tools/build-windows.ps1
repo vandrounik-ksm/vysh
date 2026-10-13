@@ -33,6 +33,9 @@ foreach ($dll in "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll") {
 # User data (hosts, settings) lives in %APPDATA%\vysh, not here,
 # so updating = delete old folder, unpack new one.
 
+# GPL text ships with every copy.
+Copy-Item LICENSE $out
+
 Compress-Archive -Path "$out\*" -DestinationPath $zip
 Write-Host "==> Done:" -ForegroundColor Green
 Write-Host "    folder: $out"

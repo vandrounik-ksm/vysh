@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'dart:ui';
 
 import 'external_colors.dart';
 
@@ -120,8 +120,8 @@ ExternalColors catppuccinColors(String flavorId, String accentId) {
       'surfaceContainerHighest': s1,
     } else ...{
       'surfaceDim': crust,
-      'surfaceBright': Color.lerp(base, Colors.white, 0.6)!,
-      'surfaceContainerLowest': Color.lerp(base, Colors.white, 0.6)!,
+      'surfaceBright': Color.lerp(base, const Color(0xFFFFFFFF), 0.6)!,
+      'surfaceContainerLowest': Color.lerp(base, const Color(0xFFFFFFFF), 0.6)!,
       'surfaceContainerLow': base,
       'surfaceContainer': mantle,
       'surfaceContainerHigh': crust,

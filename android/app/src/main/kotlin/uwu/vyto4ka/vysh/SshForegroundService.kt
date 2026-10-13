@@ -30,9 +30,9 @@ class SshForegroundService : Service() {
         private const val WAKE_LOCK_MS = 30 * 60 * 1000L
         private const val RENEW_MS = 25 * 60 * 1000L
 
-        fun start(context: Context, hostTitle: String = "SSH-соединение"): Boolean {
+        fun start(context: Context, hostTitle: String? = null): Boolean {
             val intent = Intent(context, SshForegroundService::class.java).apply {
-                putExtra("title", hostTitle)
+                if (hostTitle != null) putExtra("title", hostTitle)
             }
             return try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -72,7 +72,7 @@ class SshForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val title = intent?.getStringExtra("title") ?: "SSH подключен"
+        val title = intent?.getStringExtra("title") ?: getString(R.string.ssh_connected)
         val notification = buildNotification(title)
 
         try {
@@ -125,10 +125,10 @@ class SshForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "SSH фоновое соединение",
+                getString(R.string.ssh_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Поддержание активных SSH-сессий в фоновом режиме"
+                description = getString(R.string.ssh_channel_description)
                 setShowBadge(false)
             }
             val manager = getSystemService(NotificationManager::class.java)
@@ -158,7 +158,7 @@ class SshForegroundService : Service() {
 
         builder
             .setContentTitle("vysh: $hostTitle")
-            .setContentText("Соединение активно в фоне")
+            .setContentText(getString(R.string.ssh_notification_text))
             .setSmallIcon(R.mipmap.ic_launcher_monet)
             .setOngoing(true)
 

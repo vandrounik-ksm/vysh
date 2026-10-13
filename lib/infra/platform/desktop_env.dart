@@ -2,8 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import '../../domain/models/app_settings.dart';
-
 /// Что за рабочее окружение вокруг нас.
 class DesktopEnv {
   DesktopEnv._();
@@ -84,20 +82,6 @@ class DesktopEnv {
     }
     try {
       return Platform.isAndroid || Platform.isIOS;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  /// Итог настройки «Заголовок окна».
-  static bool useCustomTitleBar(TitleBarMode mode) {
-    if (kIsWeb) return false;
-    try {
-      return switch (mode) {
-        TitleBarMode.custom => Platform.isWindows || Platform.isLinux,
-        TitleBarMode.system => false,
-        TitleBarMode.auto => supportsCustomTitleBar,
-      };
     } catch (_) {
       return false;
     }

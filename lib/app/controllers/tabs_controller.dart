@@ -1,13 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../infra/platform/android_wakelock.dart';
-import '../models/host.dart';
-import '../models/session_tab.dart';
+import '../../domain/models/host.dart';
+import '../../domain/models/session_tab.dart';
 import 'hosts_controller.dart';
 import 'settings_controller.dart';
-import 'known_hosts.dart';
-import 'ports_providers.dart';
-import 'terminal_session.dart';
+import '../../l10n/app_strings.dart';
+import '../dependencies.dart';
+import '../terminal/terminal_session.dart';
 import 'transfer_queue.dart';
 
 /// Живые сессии по id вкладки.
@@ -42,6 +41,7 @@ class TabsController extends Notifier<TabsState> {
       secrets: ref.read(secretStoreProvider),
       knownHosts: ref.read(knownHostsProvider),
       onStatus: (s) => _setStatus(tab.id, s),
+      strings: () => AppStrings.forLanguage(ref.read(settingsProvider).language),
       defaultKeepAliveSeconds: ref.read(settingsProvider).keepAliveSeconds,
       initialPassword: password,
       scrollbackLines: ref.read(settingsProvider).scrollbackLines,
@@ -102,9 +102,9 @@ class TabsController extends Notifier<TabsState> {
       (t) => t.status == SessionStatus.ready || t.status == SessionStatus.connecting,
     );
     if (hasActive) {
-      AndroidWakeLock.acquire(title: activeTab.host.displayAddress);
+      ref.read(backgroundSessionsProvider).active(activeTab.host.displayAddress);
     } else {
-      AndroidWakeLock.release();
+      ref.read(backgroundSessionsProvider).idle();
     }
   }
 
@@ -131,7 +131,7 @@ class TabsController extends Notifier<TabsState> {
       (t) => t.status == SessionStatus.ready || t.status == SessionStatus.connecting,
     );
     if (!hasActive) {
-      AndroidWakeLock.release();
+      ref.read(backgroundSessionsProvider).idle();
     }
   }
 

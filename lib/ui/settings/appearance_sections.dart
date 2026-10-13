@@ -1,15 +1,14 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/models/app_settings.dart';
-import '../../domain/models/app_strings.dart';
+import '../../infra/platform/capabilities.dart';
+import '../../app/settings/app_settings.dart';
+import '../../l10n/app_strings.dart';
 import '../../domain/models/catppuccin.dart';
 import '../../domain/models/external_colors.dart';
-import '../../domain/services/external_colors_controller.dart';
-import '../../domain/services/settings_controller.dart';
+import '../../app/controllers/external_colors_controller.dart';
+import '../../app/controllers/settings_controller.dart';
+import '../../app/settings/window_chrome.dart';
 import '../../infra/platform/desktop_env.dart';
 import '../../infra/platform/local_files.dart';
 import '../theme/app_theme.dart';
@@ -62,9 +61,9 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
           spacing: 12,
           runSpacing: 12,
           children: [
-            for (final (name, color) in seedPresets)
+            for (final (i, color) in seedPresets.indexed)
               _SeedSwatch(
-                name: name,
+                name: strings.accentNames[i],
                 color: Color(color),
                 selected: s.seedColor == color,
                 onTap: () => ctrl.setSeedColor(color),
@@ -73,7 +72,7 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
         ),
       ColorSource.system => ext == null && notFound
           ? Text(
-              !kIsWeb && Platform.isWindows
+              PlatformCapabilities.registryAccent
                   ? (strings.isRu ? 'Акцент Windows не найден' : 'Windows accent not found')
                   : (strings.isRu
                       ? 'Акцент не найден: нужен xdg-desktop-portal с accent-color'
@@ -92,7 +91,7 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
           children: [
             if (ext != null && ext.path != null)
               Text(
-                '${ext.source}: ${ext.path}',
+                '${strings.colorSourceName(ext.source)}: ${ext.path}',
                 style: monoStyle(context, size: 12, color: scheme.onSurfaceVariant),
               )
             else if (notFound)
@@ -149,17 +148,17 @@ class _ColorSourceSectionState extends ConsumerState<ColorSourceSection> {
                       icon: Icon(mobile ? Icons.auto_awesome_outlined : Icons.palette_outlined),
                       label: Text(mobile ? 'Monet' : strings.colorSourcePreset),
                     ),
-                    if (!kIsWeb && (Platform.isWindows || Platform.isLinux))
+                    if (PlatformCapabilities.registryAccent || PlatformCapabilities.portalAccent)
                       ButtonSegment(
                         value: ColorSource.system,
                         icon: const Icon(Icons.computer),
                         label: Text(
-                          !kIsWeb && Platform.isWindows
+                          PlatformCapabilities.registryAccent
                               ? strings.colorSourceSystemWin
                               : strings.colorSourceSystemSys,
                         ),
                       ),
-                    if (!kIsWeb && Platform.isLinux)
+                    if (PlatformCapabilities.dotfileColors)
                       ButtonSegment(
                         value: ColorSource.dots,
                         icon: const Icon(Icons.wallpaper),
@@ -261,7 +260,7 @@ class TitleBarSection extends ConsumerWidget {
     final strings = AppStrings.of(context, s.language);
     // «Авто» в интерфейсе не показываем: пока пользователь не выбрал сам,
     // отмечен тот вариант, который сейчас действует.
-    final custom = DesktopEnv.useCustomTitleBar(s.titleBarMode);
+    final custom = useCustomTitleBar(s.titleBarMode);
     return SettingRow(
       label: strings.titleBarTitle,
       child: SegmentedButton<bool>(

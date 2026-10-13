@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'dart:ui';
 
 /// Цвета, пришедшие извне: акцент системы или файл дотов.
 class ExternalColors {
@@ -16,8 +16,13 @@ class ExternalColors {
   /// Основной цвет - из него строится вся схема Material You.
   final Color seed;
 
-  /// Человекочитаемый источник: «Акцент Windows», «pywal», «caelestia»…
+  /// Источник: имя программы («pywal», «caelestia», «Catppuccin Mocha»)
+  /// или один из кодов ниже - их название переводит интерфейс.
   final String source;
+
+  static const windowsAccent = 'windows-accent';
+  static const portalAccent = 'portal-accent';
+  static const colorsFile = 'colors-file';
 
   /// Файл, из которого прочитано (для показа в настройках).
   final String? path;
@@ -64,44 +69,4 @@ class ExternalColors {
     }
     return true;
   }
-}
-
-/// Накладывает готовые роли M3 на сгенерированную схему.
-ColorScheme applyRoles(ColorScheme s, Map<String, Color>? r) {
-  if (r == null || r.isEmpty) return s;
-  Color? c(String k) => r[k.toLowerCase()];
-  return s.copyWith(
-    primary: c('primary'),
-    onPrimary: c('onPrimary'),
-    primaryContainer: c('primaryContainer'),
-    onPrimaryContainer: c('onPrimaryContainer'),
-    secondary: c('secondary'),
-    onSecondary: c('onSecondary'),
-    secondaryContainer: c('secondaryContainer'),
-    onSecondaryContainer: c('onSecondaryContainer'),
-    tertiary: c('tertiary'),
-    onTertiary: c('onTertiary'),
-    tertiaryContainer: c('tertiaryContainer'),
-    onTertiaryContainer: c('onTertiaryContainer'),
-    error: c('error'),
-    onError: c('onError'),
-    errorContainer: c('errorContainer'),
-    onErrorContainer: c('onErrorContainer'),
-    surface: c('surface') ?? c('background'),
-    onSurface: c('onSurface') ?? c('onBackground'),
-    surfaceDim: c('surfaceDim'),
-    surfaceBright: c('surfaceBright'),
-    surfaceContainerLowest: c('surfaceContainerLowest'),
-    surfaceContainerLow: c('surfaceContainerLow'),
-    surfaceContainer: c('surfaceContainer'),
-    surfaceContainerHigh: c('surfaceContainerHigh'),
-    surfaceContainerHighest: c('surfaceContainerHighest'),
-    onSurfaceVariant: c('onSurfaceVariant'),
-    outline: c('outline'),
-    outlineVariant: c('outlineVariant'),
-    inverseSurface: c('inverseSurface'),
-    onInverseSurface: c('inverseOnSurface') ?? c('onInverseSurface'),
-    inversePrimary: c('inversePrimary'),
-    surfaceTint: c('surfaceTint'),
-  );
 }

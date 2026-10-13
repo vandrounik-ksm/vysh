@@ -6,6 +6,7 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.sh  text eol=lf
+*.patch text eol=lf
 
 # Файлы, которые попадают в Linux-контейнер демо-стенда.
 tools/demo/Dockerfile     text eol=lf

@@ -6,16 +6,18 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vysh/domain/models/app_settings.dart';
+import 'package:vysh/app/settings/app_settings.dart';
 import 'package:vysh/domain/models/external_colors.dart';
 import 'package:vysh/domain/models/host.dart';
 import 'package:vysh/domain/models/session_tab.dart';
+import 'package:vysh/domain/ports/document_store.dart';
 import 'package:vysh/domain/ports/secret_store.dart';
 import 'package:vysh/domain/ports/session_prompts.dart';
 import 'package:vysh/domain/ports/sftp.dart';
 import 'package:vysh/domain/ports/ssh_transport.dart';
 import 'package:vysh/domain/services/known_hosts.dart';
-import 'package:vysh/domain/services/terminal_session.dart';
+import 'package:vysh/app/terminal/session_auth.dart';
+import 'package:vysh/app/terminal/terminal_session.dart';
 import 'package:vysh/infra/platform/local_files.dart';
 import 'package:vysh/infra/storage/app_paths.dart';
 import 'package:vysh/infra/storage/json_store.dart';
@@ -106,7 +108,7 @@ TerminalSession _session(_Connector connector, _Prompts prompts, {String? passwo
       connector: connector,
       prompts: prompts,
       secrets: _Secrets(),
-      knownHosts: KnownHosts(),
+      knownHosts: KnownHosts(_MemoryStore()),
       onStatus: (_) {},
       initialPassword: password,
     );
@@ -245,7 +247,7 @@ void main() {
       final session = _session(_Connector((r) async {
         response = await r.interactive!(
             'OTP', 'Enter one-time code', [(text: 'Verification code:', echo: false)]);
-        throw const SshFailure(SshFailureKind.network, 'stop');
+        throw const SshFailure(SshError.connectionLost);
       }), prompts);
       try {
         await session.connect();
@@ -299,7 +301,7 @@ void main() {
         started.complete();
         await r.cancelled;
         cancelled = true;
-        throw const SshFailure(SshFailureKind.cancelled, 'Отменено');
+        throw const SshFailure(SshError.cancelled);
       }), _Prompts());
       final connecting = session.connect();
       await started.future;
@@ -314,7 +316,7 @@ void main() {
     final session = _session(
       _Connector((r) async {
         sent.add((r.address, await r.password!()));
-        throw const SshFailure(SshFailureKind.network, 'stop');
+        throw const SshFailure(SshError.connectionLost);
       }),
       _Prompts(),
       password: 'old-host-password',
@@ -330,4 +332,16 @@ void main() {
       session.dispose();
     }
   });
+}
+
+/// Документ в памяти вместо файла.
+class _MemoryStore implements DocumentStore {
+  Object? data;
+  @override
+  Object? readSync() => data;
+  @override
+  Future<bool> write(Object? data) async {
+    this.data = data;
+    return true;
+  }
 }

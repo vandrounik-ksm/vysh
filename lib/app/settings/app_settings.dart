@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../infra/platform/desktop_env.dart';
-import 'json_read.dart';
+import '../../domain/models/json_read.dart';
 
 /// Что делает правый клик (и тап двумя пальцами по тачпаду) в терминале.
 enum RightClickAction {
@@ -255,7 +254,7 @@ class AppSettings {
         'keepAliveSeconds': keepAliveSeconds,
         'appIcon': appIcon,
         'showAccessoryBar': showAccessoryBar,
-        'language': DesktopEnv.isMobile ? 'auto' : language.name,
+        'language': language.name,
         'scrollbackLines': scrollbackLines,
         'pingIntervalSec': pingIntervalSec,
         'pingOnlyVisible': pingOnlyVisible,
@@ -304,12 +303,10 @@ class AppSettings {
         keepAliveSeconds: json.integer('keepAliveSeconds') ?? 60,
         appIcon: json.str('appIcon') ?? 'monet',
         showAccessoryBar: json.boolean('showAccessoryBar') ?? true,
-        language: DesktopEnv.isMobile
-            ? AppLanguage.auto
-            : AppLanguage.values.firstWhere(
-                (l) => l.name == json['language'],
-                orElse: () => AppLanguage.auto,
-              ),
+        language: AppLanguage.values.firstWhere(
+          (l) => l.name == json['language'],
+          orElse: () => AppLanguage.auto,
+        ),
         scrollbackLines: (json.integer('scrollbackLines') ?? 10000)
             .clamp(500, maxScrollback)
             .toInt(),

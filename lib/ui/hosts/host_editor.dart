@@ -3,16 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/models/app_strings.dart';
+import '../../l10n/app_strings.dart';
 import '../../domain/models/host.dart';
 import '../../domain/ports/secret_store.dart';
-import '../../domain/services/hosts_controller.dart';
-import '../../domain/services/ports_providers.dart';
-import '../../domain/services/settings_controller.dart';
-import '../../domain/services/tabs_controller.dart';
-import '../../domain/services/terminal_session.dart' show expandHome;
+import '../../app/controllers/hosts_controller.dart';
+import '../../app/dependencies.dart';
+import '../../app/controllers/settings_controller.dart';
+import '../../app/controllers/tabs_controller.dart';
+import '../../app/terminal/session_auth.dart' show expandHome;
 import '../../infra/platform/desktop_env.dart';
 import '../theme/app_theme.dart';
+import '../widgets/strings_context.dart';
+import 'host_form.dart';
+part 'host_editor_sections.dart';
+part 'host_editor_widgets.dart';
 
 /// Открыть боковую панель создания/редактирования хоста.
 Future<void> showHostEditor(
@@ -23,7 +27,7 @@ Future<void> showHostEditor(
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
-    barrierLabel: 'Закрыть',
+    barrierLabel: context.strings.close,
     barrierColor: Colors.black.withValues(alpha: 0.32),
     transitionDuration: const Duration(milliseconds: 260),
     pageBuilder: (context, _, _) => Align(
@@ -54,20 +58,9 @@ class _HostEditorSheet extends ConsumerStatefulWidget {
 }
 
 class _HostEditorSheetState extends ConsumerState<_HostEditorSheet> {
-  final _form = GlobalKey<FormState>();
-  late final TextEditingController _label;
-  late final TextEditingController _address;
-  late final TextEditingController _port;
-  late final TextEditingController _user;
-  late final TextEditingController _password;
-  late final TextEditingController _keyPath;
-  late final TextEditingController _group;
-  late AuthMethod _auth;
-  late int _color;
-  int? _keepAliveSeconds;
-  bool _rememberPassword = true;
+  final _formKey = GlobalKey<FormState>();
+  late final HostForm _form;
   bool _hasSavedPassword = false;
-  bool _obscure = true;
   bool _saving = false;
 
   bool get _isEdit => widget.host != null && !widget.duplicate;
@@ -76,245 +69,82 @@ class _HostEditorSheetState extends ConsumerState<_HostEditorSheet> {
   void initState() {
     super.initState();
     final h = widget.host;
-    _label = TextEditingController(
-      text: h == null
+    _form = HostForm(
+      h,
+      initialLabel: h == null
           ? ''
-          : (widget.duplicate ? '${h.title} (копия)' : h.label),
+          : (widget.duplicate
+              ? AppStrings.forLanguage(ref.read(settingsProvider).language).copyOf(h.title)
+              : h.label),
     );
-    _address = TextEditingController(text: h?.address ?? '');
-    _lastAddressLen = _address.text.length;
-    _port = TextEditingController(text: '${h?.port ?? 22}');
-    _user = TextEditingController(text: h?.username ?? '');
-    _password = TextEditingController();
-    _keyPath = TextEditingController(text: h?.keyPath ?? '');
-    _group = TextEditingController(text: h?.group ?? '');
-    _auth = h?.auth ?? AuthMethod.password;
-    _color = h?.color ?? hostColors.first;
-    _keepAliveSeconds = h?.keepAliveSeconds;
     if (_isEdit) _checkSavedPassword();
-  }
-
-  Future<void> _checkSavedPassword() async {
-    final saved = await ref
-        .read(secretStoreProvider)
-        .read(passwordKey(widget.host!.id));
-    if (mounted && saved != null) setState(() => _hasSavedPassword = true);
   }
 
   @override
   void dispose() {
-    for (final c in [
-      _label,
-      _address,
-      _port,
-      _user,
-      _password,
-      _keyPath,
-      _group,
-    ]) {
-      c.dispose();
-    }
+    _form.dispose();
     super.dispose();
   }
 
-  int _lastAddressLen = 0;
-
-  /// Вставили `user@host:port` в поле адреса - раскладываем по полям.
-  /// Срабатывает только на вставку (скачок длины), а не при наборе по символу.
-  void _onAddressChanged(String v) {
-    final pasted = v.length - _lastAddressLen > 2;
-    _lastAddressLen = v.length;
-    final t = v.trim();
-    final looksQuick =
-        pasted && (t.contains('@') || RegExp(r'^[^:\[\]]+:\d+$').hasMatch(t));
-    final quick = looksQuick ? Host.tryParseQuick(t) : null;
-    if (quick == null) {
-      setState(() {}); // обновить подсказку в поле «Название»
-      return;
+  Future<void> _checkSavedPassword() async {
+    try {
+      final saved = await ref.read(secretStoreProvider).read(passwordKey(widget.host!.id));
+      if (mounted && saved != null) setState(() => _hasSavedPassword = true);
+    } on SecretStoreUnavailable {
+      // Хранилища нет - сохранённого пароля тоже нет; при сохранении
+      // хоста пользователь увидит ошибку записи.
     }
-    setState(() {
-      _address.value = TextEditingValue(
-        text: quick.address,
-        selection: TextSelection.collapsed(offset: quick.address.length),
-      );
-      _port.text = '${quick.port}';
-      if (t.contains('@')) _user.text = quick.username;
-      _lastAddressLen = quick.address.length;
-    });
   }
 
   Future<void> _pickKey() async {
     final file = await openFile(
-      confirmButtonText: 'Выбрать',
+      confirmButtonText: context.strings.choose,
       initialDirectory: expandHome('~/.ssh'),
     );
-    if (file != null) setState(() => _keyPath.text = file.path);
-  }
-
-  Host? _buildHost() {
-    if (!(_form.currentState?.validate() ?? false)) return null;
-    final key = _keyPath.text.trim();
-    return Host(
-      id: _isEdit ? widget.host!.id : newId(),
-      label: _label.text.trim(),
-      address: _address.text.trim(),
-      port: int.parse(_port.text.trim()),
-      // Пусто - значит root (он и показан серой подсказкой в поле).
-      username: _user.text.trim().isEmpty ? 'root' : _user.text.trim(),
-      auth: _auth,
-      keyPath: _auth == AuthMethod.key && key.isNotEmpty ? key : null,
-      group: _group.text.trim(),
-      color: _color,
-      lastConnectedAt: _isEdit ? widget.host!.lastConnectedAt : null,
-      keepAliveSeconds: _keepAliveSeconds,
-    );
+    if (file != null) _form.keyPath.text = file.path;
   }
 
   Future<void> _save({bool connect = false}) async {
     if (_saving) return;
-    final host = _buildHost();
-    if (host == null) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final host = _form.toHost(
+      id: _isEdit ? widget.host!.id : newId(),
+      lastConnectedAt: _isEdit ? widget.host!.lastConnectedAt : null,
+    );
     setState(() => _saving = true);
 
-    ref.read(hostsProvider.notifier).upsert(host);
-
-    final secrets = ref.read(secretStoreProvider);
-    final pwd = _password.text;
-    String? warning;
-    final old = widget.host;
-    if (_isEdit &&
-        old != null &&
-        (pwd.isNotEmpty || !_rememberPassword || host.auth != old.auth)) {
-      // Пароль сменили или убрали - открытые вкладки не должны
-      // переподключаться со старым паролем из памяти.
-      ref.read(tabsProvider.notifier).forgetSessionPasswords(host.id);
-    }
-    if (host.auth != AuthMethod.password || !_rememberPassword) {
-      // Пароль не нужен или его просили не хранить - убираем сохранённый.
-      try {
-        await secrets.delete(passwordKey(host.id));
-      } catch (_) {
-        warning = 'Не удалось удалить сохранённый пароль: системное хранилище недоступно';
-      }
-    } else if (pwd.isNotEmpty) {
-      try {
-        await secrets.write(passwordKey(host.id), pwd);
-      } catch (_) {
-        warning = 'Не удалось сохранить пароль: системное хранилище недоступно';
-      }
-    }
+    final pwd = _form.password.text;
+    final strings = context.strings;
+    final warning = await ref.read(hostsProvider.notifier).saveWithPassword(
+          host,
+          password: pwd,
+          remember: _form.rememberPassword,
+          previous: _isEdit ? widget.host : null,
+          forgetSessionPasswords: ref.read(tabsProvider.notifier).forgetSessionPasswords,
+        );
 
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
     if (warning != null) {
-      messenger.showSnackBar(SnackBar(content: Text(warning)));
+      messenger.showSnackBar(SnackBar(
+        content: Text(switch (warning) {
+          HostSaveWarning.passwordNotDeleted => strings.passwordNotDeleted,
+          HostSaveWarning.passwordNotSaved => strings.passwordNotSavedShort,
+        }),
+      ));
     }
     if (connect) {
-      ref
-          .read(tabsProvider.notifier)
-          .openHost(
+      ref.read(tabsProvider.notifier).openHost(
             host,
-            password: host.auth == AuthMethod.password && pwd.isNotEmpty
-                ? pwd
-                : null,
+            password: host.auth == AuthMethod.password && pwd.isNotEmpty ? pwd : null,
           );
     }
   }
 
-  InputDecoration _dec(
-    String label, {
-    String? hint,
-    Widget? icon,
-    String? helper,
-    Widget? suffix,
-  }) => InputDecoration(
-    labelText: label,
-    hintText: hint,
-    helperText: helper,
-    helperMaxLines: 2,
-    prefixIcon: icon,
-    suffixIcon: suffix,
-    filled: true,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    ),
-  );
-
-  Widget _sectionTitle(BuildContext context, String text) => Padding(
-    padding: const EdgeInsets.only(top: 24, bottom: 14),
-    child: Text(
-      text,
-      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-        color: Theme.of(context).colorScheme.primary,
-      ),
-    ),
-  );
-
-  Widget _authFields(AppStrings strings) {
-    switch (_auth) {
-      case AuthMethod.password:
-        return Column(
-          key: const ValueKey('password'),
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextFormField(
-              controller: _password,
-              obscureText: _obscure,
-              decoration: _dec(
-                strings.passwordField,
-                icon: const Icon(Icons.lock_outline),
-                helper: _hasSavedPassword
-                    ? (strings.isRu
-                          ? 'Сохранён. Пустое поле его не меняет'
-                          : 'Saved. Leave empty to keep it')
-                    : null,
-                suffix: IconButton(
-                  tooltip: _obscure
-                      ? (strings.isRu ? 'Показать' : 'Show')
-                      : (strings.isRu ? 'Скрыть' : 'Hide'),
-                  icon: Icon(
-                    _obscure
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                  ),
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                ),
-              ),
-            ),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: _rememberPassword,
-              onChanged: (v) => setState(() => _rememberPassword = v ?? false),
-              title: Text(strings.rememberPasswordCheckbox),
-            ),
-          ],
-        );
-      case AuthMethod.key:
-        return TextFormField(
-          key: const ValueKey('key'),
-          controller: _keyPath,
-          decoration: _dec(
-            strings.privateKeyField,
-            hint: '~/.ssh/id_ed25519',
-            icon: const Icon(Icons.vpn_key_outlined),
-            suffix: IconButton(
-              tooltip: strings.selectKeyFile,
-              icon: const Icon(Icons.folder_open_outlined),
-              onPressed: _pickKey,
-            ),
-          ),
-        );
-      case AuthMethod.agent:
-        return _Note(
-          strings.isRu
-              ? 'Стандартные ключи из ~/.ssh: id_ed25519, id_ecdsa, id_rsa'
-              : 'Standard keys from ~/.ssh: id_ed25519, id_ecdsa, id_rsa',
-          key: const ValueKey('agent'),
-        );
-    }
+  void _delete() {
+    ref.read(hostsProvider.notifier).remove(widget.host!.id);
+    Navigator.of(context).pop();
   }
 
   @override
@@ -325,19 +155,16 @@ class _HostEditorSheetState extends ConsumerState<_HostEditorSheet> {
     final strings = AppStrings.of(context, lang);
     final groups = ref.watch(hostGroupsProvider);
     final width = MediaQuery.sizeOf(context).width;
+    final title = _isEdit
+        ? strings.editHostTitle
+        : (widget.duplicate ? strings.duplicateHostTitle : strings.newHostTitle);
 
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.enter, control: true): () =>
-            _save(),
-        const SingleActivator(
-          LogicalKeyboardKey.enter,
-          control: true,
-          shift: true,
-        ): () =>
+        const SingleActivator(LogicalKeyboardKey.enter, control: true): () => _save(),
+        const SingleActivator(LogicalKeyboardKey.enter, control: true, shift: true): () =>
             _save(connect: true),
-        const SingleActivator(LogicalKeyboardKey.escape): () =>
-            Navigator.of(context).pop(),
+        const SingleActivator(LogicalKeyboardKey.escape): () => Navigator.of(context).pop(),
       },
       child: Material(
         color: scheme.surfaceContainerLow,
@@ -348,10 +175,8 @@ class _HostEditorSheetState extends ConsumerState<_HostEditorSheet> {
           width: width < 520 ? width : 460,
           height: double.infinity,
           child: SafeArea(
-            top: true,
-            bottom: true,
             child: Form(
-              key: _form,
+              key: _formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -359,20 +184,9 @@ class _HostEditorSheetState extends ConsumerState<_HostEditorSheet> {
                     padding: const EdgeInsets.fromLTRB(24, 28, 12, 8),
                     child: Row(
                       children: [
-                        Expanded(
-                          child: Text(
-                            _isEdit
-                                ? (widget.duplicate
-                                      ? strings.duplicateHostTitle
-                                      : strings.editHostTitle)
-                                : strings.newHostTitle,
-                            style: theme.textTheme.titleLarge,
-                          ),
-                        ),
+                        Expanded(child: Text(title, style: theme.textTheme.titleLarge)),
                         IconButton(
-                          tooltip: DesktopEnv.isDesktop
-                              ? '${strings.close} (Esc)'
-                              : strings.close,
+                          tooltip: DesktopEnv.isDesktop ? '${strings.close} (Esc)' : strings.close,
                           onPressed: () => Navigator.of(context).pop(),
                           icon: const Icon(Icons.close),
                         ),
@@ -380,392 +194,38 @@ class _HostEditorSheetState extends ConsumerState<_HostEditorSheet> {
                     ),
                   ),
                   Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-                      children: [
-                        // ── Подключение ──
-                        _sectionTitle(
-                          context,
-                          strings.isRu ? 'Подключение' : 'Connection',
-                        ),
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            final narrow = constraints.maxWidth < 420;
-                            final fields = [
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _address,
-                                  autofocus: !_isEdit,
-                                  decoration: _dec(
-                                    strings.addressField,
-                                    hint: strings.isRu
-                                        ? '10.0.0.1, example.com или user@host:port'
-                                        : '10.0.0.1, example.com or user@host:port',
-                                    icon: const Icon(Icons.public),
-                                  ),
-                                  onChanged: _onAddressChanged,
-                                  validator: (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                      ? strings.requiredField
-                                      : null,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              SizedBox(
-                                width: 96,
-                                child: TextFormField(
-                                  controller: _port,
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                  ],
-                                  decoration: _dec(strings.portField),
-                                  validator: (v) {
-                                    final p = int.tryParse(v ?? '');
-                                    return (p == null || p < 1 || p > 65535)
-                                        ? strings.invalidPort
-                                        : null;
-                                  },
-                                ),
-                              ),
-                            ];
-                            return narrow
-                                ? Column(
-                                    children: [
-                                      fields[0],
-                                      const SizedBox(height: 12),
-                                      fields[1],
-                                    ],
-                                  )
-                                : Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: fields,
-                                  );
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _user,
-                          decoration: _dec(
-                            strings.userField,
-                            hint: 'root',
-                            icon: const Icon(Icons.person_outline),
-                          ).copyWith(
-                            floatingLabelBehavior:
-                                FloatingLabelBehavior.always,
+                    child: ListenableBuilder(
+                      listenable: _form,
+                      builder: (context, _) => ListView(
+                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+                        children: [
+                          _ConnectionSection(form: _form, strings: strings, autofocus: !_isEdit),
+                          _AuthSection(
+                            form: _form,
+                            strings: strings,
+                            hasSavedPassword: _hasSavedPassword,
+                            onPickKey: _pickKey,
                           ),
-                        ),
-
-                        // ── Вход ──
-                        _sectionTitle(context, strings.authMethod),
-                        SizedBox(
-                          width: double.infinity,
-                          child: SegmentedButton<AuthMethod>(
-                            showSelectedIcon: false,
-                            style: const ButtonStyle(
-                              visualDensity: VisualDensity.compact,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            segments: [
-                              ButtonSegment(
-                                value: AuthMethod.password,
-                                label: Text(strings.authPassword),
-                                icon: const Icon(Icons.password),
-                              ),
-                              ButtonSegment(
-                                value: AuthMethod.key,
-                                label: Text(strings.authKey),
-                                icon: const Icon(Icons.key),
-                              ),
-                              ButtonSegment(
-                                value: AuthMethod.agent,
-                                label: Text(strings.isRu ? 'Авто' : 'Auto'),
-                                icon: const Icon(Icons.auto_awesome),
-                              ),
-                            ],
-                            selected: {_auth},
-                            onSelectionChanged: (s) =>
-                                setState(() => _auth = s.first),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        AnimatedSize(
-                          duration: const Duration(milliseconds: 200),
-                          alignment: Alignment.topCenter,
-                          child: _authFields(strings),
-                        ),
-
-                        // ── В списке ──
-                        _sectionTitle(
-                          context,
-                          strings.isRu
-                              ? 'Как показывать в списке'
-                              : 'List appearance',
-                        ),
-                        TextFormField(
-                          controller: _label,
-                          decoration: _dec(
-                            strings.labelField,
-                            hint: _address.text.trim().isEmpty ? null : _address.text.trim(),
-                            icon: const Icon(Icons.label_outline),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _group,
-                          decoration: _dec(
-                            strings.groupField,
-                            icon: const Icon(Icons.folder_outlined),
-                          ),
-                          onChanged: (_) => setState(() {}),
-                        ),
-                        if (groups.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              for (final g in groups)
-                                ChoiceChip(
-                                  label: Text(g),
-                                  selected: _group.text.trim() == g,
-                                  onSelected: (on) =>
-                                      setState(() => _group.text = on ? g : ''),
-                                ),
-                            ],
-                          ),
+                          _ListSection(form: _form, strings: strings, groups: groups),
+                          const SizedBox(height: 16),
+                          _KeepAliveSection(form: _form, strings: strings),
                         ],
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            // Живой предпросмотр значка, как он будет выглядеть в списке.
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Color(_color).withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.dns_rounded,
-                                color: Color(_color),
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              strings.cardColor,
-                              style: theme.textTheme.bodyLarge,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [
-                            for (final c in hostColors)
-                              _ColorDot(
-                                color: Color(c),
-                                selected: c == _color,
-                                onTap: () => setState(() => _color = c),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _sectionTitle(context, strings.keepAliveGlobalTitle),
-                        DropdownButtonFormField<int?>(
-                          initialValue: _keepAliveSeconds,
-                          decoration: _dec(
-                            strings.keepAliveField,
-                            icon: const Icon(Icons.timer_outlined),
-                          ),
-                          items: [
-                            DropdownMenuItem(
-                              value: null,
-                              child: Text(strings.keepAliveDefault),
-                            ),
-                            DropdownMenuItem(
-                              value: 0,
-                              child: Text(strings.keepAliveOff),
-                            ),
-                            DropdownMenuItem(
-                              value: 15,
-                              child: Text(strings.keepAliveSecondsVal(15)),
-                            ),
-                            DropdownMenuItem(
-                              value: 30,
-                              child: Text(strings.keepAliveSecondsVal(30)),
-                            ),
-                            DropdownMenuItem(
-                              value: 60,
-                              child: Text(strings.keepAliveRecom),
-                            ),
-                            DropdownMenuItem(
-                              value: 120,
-                              child: Text(
-                                strings.isRu
-                                    ? '120 секунд (2 мин)'
-                                    : '120 seconds (2 min)',
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 300,
-                              child: Text(
-                                strings.isRu
-                                    ? '300 секунд (5 мин)'
-                                    : '300 seconds (5 min)',
-                              ),
-                            ),
-                          ],
-                          onChanged: (v) =>
-                              setState(() => _keepAliveSeconds = v),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                   const Divider(),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 24, 16),
-                    child: Row(
-                      children: [
-                        if (_isEdit)
-                          IconButton(
-                            tooltip: strings.delete,
-                            color: scheme.error,
-                            onPressed: () {
-                              ref
-                                  .read(hostsProvider.notifier)
-                                  .remove(widget.host!.id);
-                              Navigator.of(context).pop();
-                            },
-                            icon: const Icon(Icons.delete_outline),
-                          ),
-                        const Spacer(),
-                        if (DesktopEnv.isDesktop)
-                          Tooltip(
-                            message: 'Ctrl+Shift+Enter',
-                            child: TextButton(
-                              onPressed: _saving
-                                  ? null
-                                  : () => _save(connect: true),
-                              child: Text(
-                                strings.isRu
-                                    ? 'Сохранить и подключиться'
-                                    : 'Save & connect',
-                              ),
-                            ),
-                          )
-                        else
-                          TextButton(
-                            onPressed: _saving
-                                ? null
-                                : () => _save(connect: true),
-                            child: Text(
-                              strings.isRu
-                                  ? 'Сохранить и подключиться'
-                                  : 'Save & connect',
-                            ),
-                          ),
-                        const SizedBox(width: 8),
-                        if (DesktopEnv.isDesktop)
-                          Tooltip(
-                            message: 'Ctrl+Enter',
-                            child: FilledButton(
-                              onPressed: _saving ? null : _save,
-                              child: Text(strings.save),
-                            ),
-                          )
-                        else
-                          FilledButton(
-                            onPressed: _saving ? null : _save,
-                            child: Text(strings.save),
-                          ),
-                      ],
-                    ),
+                  _EditorActions(
+                    strings: strings,
+                    saving: _saving,
+                    onDelete: _isEdit ? _delete : null,
+                    onSave: _save,
+                    onSaveAndConnect: () => _save(connect: true),
                   ),
                 ],
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _Note extends StatelessWidget {
-  const _Note(this.text, {super.key});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.secondaryContainer.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.info_outline,
-            size: 18,
-            color: scheme.onSecondaryContainer,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 13,
-                color: scheme.onSecondaryContainer,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ColorDot extends StatelessWidget {
-  const _ColorDot({
-    required this.color,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final Color color;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return InkResponse(
-      onTap: onTap,
-      radius: 22,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: selected ? scheme.onSurface : Colors.transparent,
-            width: 2.5,
-          ),
-        ),
-        child: selected
-            ? const Icon(Icons.check, size: 18, color: Colors.white)
-            : null,
       ),
     );
   }

@@ -104,7 +104,7 @@ class DartSsh2Sftp implements SftpSession {
             stall = Timer(
               _stallTimeout,
               () => fail(SftpFailure(
-                  'Сервер перестал присылать данные (${_stallTimeout.inSeconds} с без ответа)')),
+                  SftpFailureCode.stalled, {'seconds': '${_stallTimeout.inSeconds}'})),
             );
           }
 
@@ -159,7 +159,7 @@ class DartSsh2Sftp implements SftpSession {
           if (e.code != SftpStatusCode.noSuchFile) rethrow;
         }
         if (existing != null && existing.isDirectory) {
-          throw SftpFailure('$remotePath - это папка', code: SftpFailureCode.exists);
+          throw SftpFailure(SftpFailureCode.isDirectory, {'path': remotePath});
         }
 
         // Симлинк заменять нельзя (rename превратил бы его в обычный файл) -
@@ -279,7 +279,7 @@ class DartSsh2Sftp implements SftpSession {
     } catch (_) {}
   }
 
-  /// Переводим ошибки SFTP в понятные сообщения.
+  /// Переводим ошибки SFTP в коды [SftpFailureCode].
   Future<T> _guard<T>(Future<T> Function() body) async {
     try {
       return await body();
@@ -288,28 +288,21 @@ class DartSsh2Sftp implements SftpSession {
     } on SftpFailure {
       rethrow;
     } on SftpStatusError catch (e) {
-      throw SftpFailure(
-        switch (e.code) {
-          2 => 'Нет такого файла или папки',
-          3 => 'Нет прав доступа',
-          4 => 'Операция не выполнена${e.message.isEmpty ? '' : ': ${e.message}'}',
-          8 => 'Сервер не поддерживает эту операцию',
-          11 => 'Файл уже существует',
-          _ => e.message.isEmpty ? 'Ошибка SFTP (${e.code})' : e.message,
-        },
-        code: switch (e.code) {
-          2 => SftpFailureCode.noSuchFile,
-          3 => SftpFailureCode.permissionDenied,
-          11 => SftpFailureCode.exists,
-          _ => SftpFailureCode.other,
-        },
-      );
+      final detail = {if (e.message.isNotEmpty) 'detail': e.message};
+      throw switch (e.code) {
+        SftpStatusCode.noSuchFile => const SftpFailure(SftpFailureCode.noSuchFile),
+        SftpStatusCode.permissionDenied => const SftpFailure(SftpFailureCode.permissionDenied),
+        SftpStatusCode.failure => SftpFailure(SftpFailureCode.failed, detail),
+        SftpStatusCode.opUnsupported => const SftpFailure(SftpFailureCode.unsupported),
+        11 => const SftpFailure(SftpFailureCode.exists),
+        _ => SftpFailure(SftpFailureCode.other, {'code': '${e.code}', ...detail}),
+      };
     } on SftpError catch (e) {
-      throw SftpFailure(e.message);
+      throw SftpFailure(SftpFailureCode.other, {'detail': e.message});
     } on FileSystemException catch (e) {
-      throw SftpFailure('Локальный файл: ${e.osError?.message ?? e.message}');
+      throw SftpFailure(SftpFailureCode.localFile, {'detail': e.osError?.message ?? e.message});
     } on SSHError catch (e) {
-      throw SftpFailure('Соединение: $e');
+      throw SftpFailure(SftpFailureCode.connection, {'detail': '$e'});
     }
   }
 }

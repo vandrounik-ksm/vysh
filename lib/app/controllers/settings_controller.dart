@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../infra/storage/json_store.dart';
-import '../models/app_settings.dart';
+import '../../infra/platform/desktop_env.dart';
+import '../dependencies.dart';
+import '../settings/app_settings.dart';
 
 final settingsProvider = NotifierProvider<SettingsController, AppSettings>(
   SettingsController.new,
 );
 
 class SettingsController extends Notifier<AppSettings> {
-  final _store = JsonStore('settings.json');
+  late final _store = ref.read(documentStoreProvider('settings.json'));
 
   @override
   AppSettings build() {
     final raw = _store.readSync();
-    return raw is Map<String, Object?>
-        ? AppSettings.fromJson(raw)
-        : const AppSettings();
+    final s = raw is Map<String, Object?> ? AppSettings.fromJson(raw) : const AppSettings();
+    // На Android язык выбирается в системе (язык приложения), своей настройки нет.
+    return DesktopEnv.isMobile ? s.copyWith(language: AppLanguage.auto) : s;
   }
 
   void setThemeMode(ThemeMode mode) => _update(state.copyWith(themeMode: mode));

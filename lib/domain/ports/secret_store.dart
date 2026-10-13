@@ -1,7 +1,8 @@
 /// Хранилище секретов (пароли, парольные фразы ключей).
 /// Реализация по умолчанию - системный keyring.
 abstract interface class SecretStore {
-  /// null - секрета нет или хранилище недоступно.
+  /// null - секрета нет. Недоступное хранилище (нет keyring-демона и т. п.)
+  /// - исключение [SecretStoreUnavailable], а не «секрета нет».
   Future<String?> read(String key);
 
   /// Бросает исключение, если хранилище недоступно.
@@ -9,6 +10,14 @@ abstract interface class SecretStore {
 
   /// Бросает исключение, если хранилище недоступно.
   Future<void> delete(String key);
+}
+
+/// Системное хранилище секретов недоступно.
+class SecretStoreUnavailable implements Exception {
+  const SecretStoreUnavailable(this.detail);
+  final String detail;
+  @override
+  String toString() => 'SecretStoreUnavailable($detail)';
 }
 
 /// Ключи секретов для хоста.

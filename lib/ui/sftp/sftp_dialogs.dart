@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../domain/ports/sftp.dart';
+import '../../l10n/app_strings.dart';
 import '../theme/app_theme.dart';
+import '../widgets/strings_context.dart';
 
 InputDecoration _dec(String label) => InputDecoration(
       labelText: label,
@@ -38,10 +40,10 @@ Future<String?> askText(
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.strings.cancel)),
         FilledButton(
           onPressed: () => Navigator.pop(context, c.text.trim()),
-          child: const Text('ОК'),
+          child: Text(context.strings.ok),
         ),
       ],
     ),
@@ -50,24 +52,24 @@ Future<String?> askText(
 
 Future<bool> confirmDelete(BuildContext context, List<RemoteEntry> entries) async {
   final dirs = entries.where((e) => e.isDir && !e.isLink).length;
-  final what = entries.length == 1 ? '«${entries.first.name}»' : '${entries.length} элементов';
+  final strings = context.strings;
   final ok = await showDialog<bool>(
     context: context,
     builder: (context) {
       final scheme = Theme.of(context).colorScheme;
       return AlertDialog(
         icon: Icon(Icons.delete_outline, color: scheme.error),
-        title: Text('Удалить $what?'),
+        title: Text(strings.deleteWhatTitle([for (final e in entries) e.name])),
         content: Text(dirs > 0
-            ? 'Папки будут удалены вместе со всем содержимым. Это нельзя отменить.'
-            : 'Файлы будут удалены с сервера. Это нельзя отменить.'),
+            ? strings.deleteFoldersDesc
+            : strings.deleteFilesDesc),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(context.strings.cancel)),
           FilledButton(
             style: FilledButton.styleFrom(
                 backgroundColor: scheme.error, foregroundColor: scheme.onError),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить'),
+            child: Text(strings.delete),
           ),
         ],
       );
@@ -79,34 +81,34 @@ Future<bool> confirmDelete(BuildContext context, List<RemoteEntry> entries) asyn
 /// Файлы с такими именами уже есть на сервере.
 /// true - заменить, false - пропустить их, null - отменить загрузку.
 Future<bool?> askOverwrite(BuildContext context, List<String> names) {
-  final what = names.length == 1 ? '«${names.first}»' : '${names.length} файлов';
+  final strings = context.strings;
   final shown = names.take(8).join('\n') + (names.length > 8 ? '\n…' : '');
   return showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
       icon: const Icon(Icons.file_copy_outlined),
-      title: Text('Заменить $what?'),
+      title: Text(strings.replaceWhatTitle(names)),
       content: SizedBox(
         width: 380,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('На сервере уже есть файлы с такими именами:'),
+            Text(strings.replaceDesc),
             const SizedBox(height: 8),
             Text(shown, style: monoStyle(context, size: 12)),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.strings.cancel)),
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('Пропустить'),
+          child: Text(strings.skip),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
-          child: const Text('Заменить'),
+          child: Text(strings.replace),
         ),
       ],
     ),
@@ -152,10 +154,11 @@ class _PermissionsDialogState extends State<_PermissionsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    const who = ['Владелец', 'Группа', 'Остальные'];
-    const what = ['Чтение', 'Запись', 'Выполнение'];
+    final strings = context.strings;
+    final who = strings.permissionWho;
+    final what = strings.permissionWhat;
     return AlertDialog(
-      title: const Text('Права доступа'),
+      title: Text(strings.permissions),
       content: SizedBox(
         width: 380,
         child: Column(
@@ -203,7 +206,7 @@ class _PermissionsDialogState extends State<_PermissionsDialog> {
             TextField(
               controller: _octal,
               style: monoStyle(context, size: 14),
-              decoration: _dec('Восьмерично (например, 755)'),
+              decoration: _dec(strings.octalHint),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp('[0-7]')),
                 LengthLimitingTextInputFormatter(4),
@@ -217,8 +220,8 @@ class _PermissionsDialogState extends State<_PermissionsDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-        FilledButton(onPressed: () => Navigator.pop(context, _mode), child: const Text('Применить')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.strings.cancel)),
+        FilledButton(onPressed: () => Navigator.pop(context, _mode), child: Text(strings.apply)),
       ],
     );
   }

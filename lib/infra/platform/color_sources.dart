@@ -37,7 +37,7 @@ class ColorSources {
       if (m == null) return null;
       final v = int.parse(m.group(1)!, radix: 16);
       final color = Color.fromARGB(255, v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF);
-      return ExternalColors(seed: color, source: 'Акцент Windows');
+      return ExternalColors(seed: color, source: ExternalColors.windowsAccent);
     } catch (_) {
       return null;
     }
@@ -64,7 +64,7 @@ class ColorSources {
       int ch(double x) => (x * 255).round().clamp(0, 255).toInt();
       return ExternalColors(
         seed: Color.fromARGB(255, ch(rgb[0]), ch(rgb[1]), ch(rgb[2])),
-        source: 'Акцент системы (xdg-portal)',
+        source: ExternalColors.portalAccent,
       );
     } catch (_) {
       return null;
@@ -187,7 +187,7 @@ class ColorSources {
     final isCaelestia = name.contains('/caelestia/');
     return ExternalColors(
       seed: seed,
-      source: isCaelestia ? 'caelestia' : 'Файл цветов',
+      source: isCaelestia ? 'caelestia' : ExternalColors.colorsFile,
       path: name,
       roles: roles,
       ansi: ansi,

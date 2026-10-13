@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/models/app_strings.dart';
-import '../../domain/services/hosts_controller.dart';
-import '../../domain/services/settings_controller.dart';
+import '../../l10n/app_strings.dart';
+import '../../app/controllers/hosts_controller.dart';
+import '../../app/controllers/settings_controller.dart';
 import 'ui_state.dart';
 
 /// Вкладки главной (M3 primary tabs): «Хосты» и «Настройки».

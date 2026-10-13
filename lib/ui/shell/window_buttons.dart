@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../l10n/app_strings.dart';
+import '../widgets/strings_context.dart';
+
 /// Кнопки окна для своего заголовка: свернуть / развернуть / закрыть.
 class WindowButtons extends StatefulWidget {
   const WindowButtons({super.key, this.height = 46});
@@ -40,20 +43,20 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
       mainAxisSize: MainAxisSize.min,
       children: [
         _CaptionButton(
-          tooltip: 'Свернуть',
+          tooltip: context.strings.minimize,
           icon: Icons.remove_rounded,
           height: widget.height,
           onTap: windowManager.minimize,
         ),
         _CaptionButton(
-          tooltip: _maximized ? 'Восстановить' : 'Развернуть',
+          tooltip: _maximized ? context.strings.restore : context.strings.maximize,
           icon: _maximized ? Icons.filter_none_rounded : Icons.crop_square_rounded,
           iconSize: _maximized ? 14 : 16,
           height: widget.height,
           onTap: () => _maximized ? windowManager.unmaximize() : windowManager.maximize(),
         ),
         _CaptionButton(
-          tooltip: 'Закрыть',
+          tooltip: context.strings.close,
           icon: Icons.close_rounded,
           height: widget.height,
           danger: true,

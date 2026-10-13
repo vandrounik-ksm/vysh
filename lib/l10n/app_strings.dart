@@ -1,9 +1,21 @@
-import 'package:flutter/material.dart';
+import 'dart:io' show FileSystemException;
 import 'dart:ui' as ui;
 
-import 'app_settings.dart';
+import 'package:flutter/material.dart';
+
+import '../app/settings/app_settings.dart';
+import '../domain/models/local_file_failure.dart';
+import '../domain/ports/sftp.dart';
+import '../domain/ports/ssh_transport.dart';
+
+part 'connection_strings.dart';
+part 'hosts_strings.dart';
+part 'sftp_strings.dart';
+part 'terminal_strings.dart';
 
 /// Централизованная локализация приложения (русский и английский языки).
+/// Строки по разделам - в частях этой библиотеки (`part`), все доступны
+/// через один объект AppStrings.
 class AppStrings {
   const AppStrings({required this.isRu});
 
@@ -14,12 +26,16 @@ class AppStrings {
   static AppStrings of(
     BuildContext context, [
     AppLanguage language = AppLanguage.auto,
-  ]) {
+  ]) =>
+      forLanguage(language, Localizations.maybeLocaleOf(context));
+
+  /// Строки без BuildContext - для сообщений сессии и фоновых задач.
+  /// [locale] - язык интерфейса; по умолчанию первый язык системы.
+  static AppStrings forLanguage(AppLanguage language, [Locale? locale]) {
     if (language == AppLanguage.ru) return const AppStrings(isRu: true);
     if (language == AppLanguage.en) return const AppStrings(isRu: false);
 
-    final loc =
-        Localizations.maybeLocaleOf(context) ??
+    final loc = locale ??
         (ui.PlatformDispatcher.instance.locales.isNotEmpty
             ? ui.PlatformDispatcher.instance.locales.first
             : ui.PlatformDispatcher.instance.locale);
@@ -137,6 +153,14 @@ class AppStrings {
   String get colorSourceSystemWin => isRu ? 'Акцент Windows' : 'Windows accent';
   String get colorSourceSystemSys => isRu ? 'Акцент системы' : 'System accent';
   String get colorSourceDots => isRu ? 'Из дотов' : 'From dots';
+
+  /// Название источника цветов ([ExternalColors.source]).
+  String colorSourceName(String source) => switch (source) {
+        'windows-accent' => isRu ? 'Акцент Windows' : 'Windows accent',
+        'portal-accent' => isRu ? 'Акцент системы (xdg-portal)' : 'System accent (xdg-portal)',
+        'colors-file' => isRu ? 'Файл цветов' : 'Colors file',
+        _ => source,
+      };
   String get compactUi => isRu ? 'Компактный интерфейс' : 'Compact interface';
   String get titleBarTitle => isRu ? 'Заголовок окна' : 'Window title bar';
   String get titleBarCustom => isRu ? 'Свой с вкладками' : 'Custom with tabs';
@@ -209,6 +233,7 @@ class AppStrings {
   String get confirmMultilinePasteTitle => isRu ? 'Предупреждать при многострочной вставке' : 'Confirm multiline paste';
   String get confirmMultilinePasteDesc => isRu ? 'Защита от случайного выполнения команд' : 'Protection from accidental command execution';
   String get aboutApp => isRu ? 'О программе' : 'About';
+  String get thirdPartyLicenses => isRu ? 'Лицензии компонентов' : 'Third-party licenses';
   String get appDescription => isRu
       ? 'Минималистичный и красивый SSH-клиент и менеджер подключений.'
       : 'Minimalist and elegant SSH client & connection manager.';
@@ -306,6 +331,10 @@ class AppStrings {
   String get uploadStarted => isRu ? 'Загрузка начата' : 'Upload started';
 
   // Хранение данных
+  String profileUnavailable(String path, String error) => isRu
+      ? 'Папка профиля $path недоступна ($error). Хосты и настройки сейчас сохраняются во временную папку.'
+      : 'Profile folder $path is unavailable ($error). Hosts and settings are saved to a temporary folder for now.';
+
   String saveFailed(String file, String error) => isRu
       ? 'Не удалось сохранить $file: $error'
       : 'Could not save $file: $error';

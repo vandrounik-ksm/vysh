@@ -27,15 +27,20 @@ class AppPaths {
     }
   }
 
+  /// Папку профиля создать не удалось: данные временно пишутся во
+  /// временную папку, и пользователь должен об этом узнать.
+  static ({String path, String error})? initError;
+
   static Future<void> init() async {
     if (kIsWeb) return;
+    String? path;
     try {
-      final path = await _resolve();
+      path = await _resolve();
       final dir = Directory(path);
       await dir.create(recursive: true);
       _configDir = dir;
-    } catch (_) {
-      // Игнорируем ошибки файловой системы в web/sandbox
+    } catch (e) {
+      initError = (path: path ?? '?', error: '$e');
     }
   }
 

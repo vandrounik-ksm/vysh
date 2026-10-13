@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_connected">SSH подключен</string>
+    <string name="ssh_channel_name">SSH фоновое соединение</string>
+    <string name="ssh_channel_description">Поддержание активных SSH-сессий в фоновом режиме</string>
+    <string name="ssh_notification_text">Соединение активно в фоне</string>
+</resources>

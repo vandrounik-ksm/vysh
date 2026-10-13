@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../../domain/ports/document_store.dart';
 import 'app_paths.dart';
 
 /// Ошибка записи одного из файлов конфигурации - UI показывает её пользователю.
@@ -15,7 +16,7 @@ typedef JsonStoreFailure = ({String fileName, String message});
 /// последовательная и атомарная: временный файл + rename поверх старого
 /// (на Windows Dart делает MoveFileEx с заменой). Прежняя версия остаётся
 /// в `.bak`, битый файл перед заменой сохраняется в `.corrupt-<время>`.
-class JsonStore {
+class JsonStore implements DocumentStore {
   JsonStore(this.fileName);
 
   final String fileName;
@@ -30,6 +31,7 @@ class JsonStore {
   File get _tmp => File('${file.path}.tmp');
   File get _bak => File('${file.path}.bak');
 
+  @override
   Object? readSync() {
     if (kIsWeb) {
       return _webStore[fileName];
@@ -70,6 +72,7 @@ class JsonStore {
 
   /// Записать данные. Future завершается после фактической записи и
   /// возвращает false при ошибке (она же публикуется в [failure]).
+  @override
   Future<bool> write(Object? data) {
     if (kIsWeb) {
       _webStore[fileName] = data;

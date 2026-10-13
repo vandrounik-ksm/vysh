@@ -4,16 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/models/app_strings.dart';
+import '../../l10n/app_strings.dart';
+import '../widgets/strings_context.dart';
 import '../../domain/models/host.dart';
-import '../../domain/services/hosts_controller.dart';
-import '../../domain/services/settings_controller.dart';
-import '../../domain/services/tabs_controller.dart';
+import '../../app/controllers/hosts_controller.dart';
+import '../../app/controllers/settings_controller.dart';
+import '../../app/controllers/tabs_controller.dart';
 import '../../infra/platform/desktop_env.dart';
 import '../shell/ui_state.dart';
 import '../widgets/context_menu.dart';
 import 'host_card.dart';
 import 'host_editor.dart';
+part 'hosts_page_widgets.dart';
 
 class HostsPage extends ConsumerStatefulWidget {
   const HostsPage({super.key});
@@ -76,16 +78,16 @@ class _HostsPageState extends ConsumerState<HostsPage> {
         context: context,
         builder: (context) => AlertDialog(
           icon: const Icon(Icons.tab_outlined),
-          title: Text('Открыть ${hosts.length} вкладок?'),
-          content: const Text('Каждый хост откроется в отдельной вкладке.'),
+          title: Text(context.strings.openTabsTitle(hosts.length)),
+          content: Text(context.strings.openTabsDesc),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Отмена'),
+              child: Text(context.strings.cancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Подключиться'),
+              child: Text(context.strings.connect),
             ),
           ],
         ),
@@ -100,20 +102,16 @@ class _HostsPageState extends ConsumerState<HostsPage> {
     if (hosts.isEmpty) return;
     final scheme = Theme.of(context).colorScheme;
     final names = hosts.map((h) => h.title).toList();
-    final shown = names.take(8).join(', ');
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         icon: Icon(Icons.delete_outline, color: scheme.error),
-        title: Text(hosts.length == 1 ? 'Удалить хост?' : 'Удалить ${hosts.length} хостов?'),
-        content: Text(
-          '$shown${names.length > 8 ? ' и ещё ${names.length - 8}' : ''}.\n'
-          'Сохранённые пароли этих хостов тоже будут удалены.',
-        ),
+        title: Text(context.strings.deleteHostsTitle(hosts.length)),
+        content: Text(context.strings.deleteHostsDesc(names)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
+            child: Text(context.strings.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
@@ -121,7 +119,7 @@ class _HostsPageState extends ConsumerState<HostsPage> {
               foregroundColor: scheme.onError,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Удалить'),
+            child: Text(context.strings.delete),
           ),
         ],
       ),
@@ -132,11 +130,7 @@ class _HostsPageState extends ConsumerState<HostsPage> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            hosts.length == 1
-                ? 'Хост удалён'
-                : 'Удалено хостов: ${hosts.length}',
-          ),
+          content: Text(context.strings.hostsDeleted(hosts.length)),
         ),
       );
     }
@@ -361,286 +355,6 @@ class _HostsPageState extends ConsumerState<HostsPage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.strings, required this.onAdd});
-
-  final AppStrings strings;
-  final VoidCallback onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(28),
-            ),
-            child: Icon(
-              Icons.dns_rounded,
-              size: 44,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(strings.noHostsTitle, style: theme.textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(
-              strings.noHostsDesc,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ),
-          const SizedBox(height: 20),
-          FilledButton.tonalIcon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add),
-            label: Text(strings.newHost),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NoResults extends StatelessWidget {
-  const _NoResults({
-    required this.query,
-    required this.quick,
-    required this.strings,
-    required this.onQuick,
-  });
-
-  final String query;
-  final Host? quick;
-  final AppStrings strings;
-  final ValueChanged<Host> onQuick;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 48),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              strings.isRu
-                  ? 'Ничего не найдено по «$query»'
-                  : 'No results for "$query"',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-            if (quick != null) ...[
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () => onQuick(quick!),
-                icon: const Icon(Icons.bolt),
-                label: Text(
-                  strings.isRu
-                      ? 'Подключиться к ${quick!.displayAddress}'
-                      : 'Connect to ${quick!.displayAddress}',
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                strings.isRu
-                    ? 'Enter - подключиться без сохранения'
-                    : 'Enter to connect without saving',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Заголовок группы: название, число хостов и действия над всей группой.
-class _GroupHeader extends StatelessWidget {
-  const _GroupHeader({
-    required this.name,
-    required this.hosts,
-    required this.selected,
-    required this.onConnectAll,
-    required this.onSelectAll,
-    required this.onDeleteAll,
-  });
-
-  final String name;
-  final List<Host> hosts;
-  final Set<String> selected;
-  final VoidCallback onConnectAll;
-  final VoidCallback onSelectAll;
-  final VoidCallback onDeleteAll;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final all = hosts.every((h) => selected.contains(h.id));
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 6),
-      child: Row(
-        children: [
-          Flexible(
-            child: Text(
-              name,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall?.copyWith(color: scheme.primary),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '${hosts.length}',
-              style: theme.textTheme.labelSmall
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ),
-          const SizedBox(width: 4),
-          IconButton(
-            tooltip: hosts.length == 1 ? 'Подключиться' : 'Подключиться ко всем',
-            visualDensity: VisualDensity.compact,
-            iconSize: 20,
-            icon: const Icon(Icons.play_arrow_rounded),
-            onPressed: onConnectAll,
-          ),
-          IconButton(
-            tooltip: all ? 'Снять выбор с группы' : 'Выбрать группу',
-            visualDensity: VisualDensity.compact,
-            iconSize: 18,
-            icon: Icon(all ? Icons.check_box : Icons.check_box_outline_blank),
-            onPressed: onSelectAll,
-          ),
-          MenuIconButton(
-            tooltip: 'Действия с группой',
-            items: [
-              menuItem(
-                hosts.length == 1
-                    ? 'Подключиться'
-                    : 'Подключиться ко всем (${hosts.length})',
-                icon: Icons.play_arrow_rounded,
-                onPressed: onConnectAll,
-              ),
-              menuItem(
-                all ? 'Снять выбор' : 'Выбрать все в группе',
-                icon: Icons.check_box_outlined,
-                onPressed: onSelectAll,
-              ),
-              menuDivider(),
-              menuItem(
-                'Удалить группу…',
-                icon: Icons.delete_outline,
-                color: scheme.error,
-                onPressed: onDeleteAll,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Панель вместо поиска, пока выбраны хосты.
-class _SelectionBar extends StatelessWidget {
-  const _SelectionBar({
-    super.key,
-    required this.count,
-    required this.allSelected,
-    required this.onSelectAll,
-    required this.onClear,
-    required this.onConnect,
-    required this.onDelete,
-  });
-
-  final int count;
-  final bool allSelected;
-  final VoidCallback onSelectAll;
-  final VoidCallback onClear;
-  final VoidCallback onConnect;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.only(left: 4, right: 4),
-      decoration: BoxDecoration(
-        color: scheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Снять выбор (Esc)',
-            icon: Icon(Icons.close, color: scheme.onSecondaryContainer),
-            onPressed: onClear,
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    'Выбрано: $count',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(color: scheme.onSecondaryContainer),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (!allSelected)
-                  TextButton(
-                    onPressed: onSelectAll,
-                    child: const Text('Выбрать все'),
-                  ),
-              ],
-            ),
-          ),
-          FilledButton.icon(
-            onPressed: onConnect,
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: Text(count == 1 ? 'Подключиться' : 'Подключиться ко всем'),
-          ),
-          const SizedBox(width: 8),
-          FilledButton.tonalIcon(
-            style: FilledButton.styleFrom(
-              backgroundColor: scheme.errorContainer,
-              foregroundColor: scheme.onErrorContainer,
-            ),
-            onPressed: onDelete,
-            icon: const Icon(Icons.delete_outline),
-            label: const Text('Удалить'),
-          ),
-          const SizedBox(width: 2),
-        ],
       ),
     );
   }

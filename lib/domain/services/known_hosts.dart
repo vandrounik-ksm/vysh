@@ -1,6 +1,4 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../infra/storage/json_store.dart';
+import '../ports/document_store.dart';
 import '../models/json_read.dart';
 
 class KnownHostKey {
@@ -23,11 +21,9 @@ class KnownHostKey {
       );
 }
 
-final knownHostsProvider = Provider<KnownHosts>((ref) => KnownHosts());
-
 /// Отпечатки ключей серверов (`known_hosts.json`), ключ - `адрес:порт`.
 class KnownHosts {
-  KnownHosts() {
+  KnownHosts(this._store) {
     final raw = _store.readSync();
     if (raw is Map<String, Object?>) {
       raw.forEach((k, v) {
@@ -36,7 +32,7 @@ class KnownHosts {
     }
   }
 
-  final _store = JsonStore('known_hosts.json');
+  final DocumentStore _store;
   final _entries = <String, KnownHostKey>{};
 
   static String _id(String address, int port) => '${address.toLowerCase()}:$port';

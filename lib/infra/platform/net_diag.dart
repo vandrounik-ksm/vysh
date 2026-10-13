@@ -6,8 +6,43 @@ import 'package:flutter/foundation.dart';
 
 enum DiagKind { ping, traceroute, port }
 
+/// Собственные сообщения диагностики; текст выбирает интерфейс.
+enum DiagMessage {
+  /// Нет системных утилит (веб-версия).
+  unavailable,
+
+  /// args: host.
+  badAddress,
+  noTraceroute,
+
+  /// args: detail.
+  failed,
+
+  /// args: target, ms.
+  portOpen,
+  stopped,
+
+  /// args: code.
+  exitCode,
+
+  /// args: detail.
+  cannotRun,
+}
+
+/// Строка вывода: либо вывод утилиты как есть, либо своё сообщение.
+class DiagLine {
+  const DiagLine(DiagMessage this.message, [this.args = const {}]) : raw = null;
+  const DiagLine.raw(String this.raw)
+      : message = null,
+        args = const {};
+
+  final String? raw;
+  final DiagMessage? message;
+  final Map<String, String> args;
+}
+
 /// Сетевая диагностика системными утилитами: ping, tracert/traceroute.
-/// Вывод идёт потоком строк; [stop] прерывает.
+/// Вывод идёт потоком строк [DiagLine]; [stop] прерывает.
 class NetDiag {
   NetDiag(this.kind, this.host, this.port);
 
@@ -15,8 +50,8 @@ class NetDiag {
   final String host;
   final int port;
 
-  final _out = StreamController<String>.broadcast();
-  Stream<String> get output => _out.stream;
+  final _out = StreamController<DiagLine>.broadcast();
+  Stream<DiagLine> get output => _out.stream;
 
   Process? _process;
   Socket? _socket;
@@ -24,13 +59,13 @@ class NetDiag {
 
   Future<void> start() async {
     if (kIsWeb) {
-      _out.add('Сетевая диагностика через системные утилиты недоступна в веб-версии.');
+      _out.add(const DiagLine(DiagMessage.unavailable));
       await _out.close();
       return;
     }
     // Адрес уходит в командную строку - пускаем только безопасные символы.
     if (!RegExp(r'^[A-Za-z0-9.:_\-]+$').hasMatch(host)) {
-      _out.add('Недопустимый адрес: $host');
+      _out.add(DiagLine(DiagMessage.badAddress, {'host': host}));
       await _out.close();
       return;
     }
@@ -52,13 +87,11 @@ class NetDiag {
           } else if (await _exists('tracepath')) {
             await _run(['tracepath', '-n', host]);
           } else {
-            _out.add(
-              'Не найден ни traceroute, ни tracepath. Установите пакет traceroute.',
-            );
+            _out.add(const DiagLine(DiagMessage.noTraceroute));
           }
       }
     } catch (e) {
-      _out.add('Ошибка диагностики: $e');
+      _out.add(DiagLine(DiagMessage.failed, {'detail': '$e'}));
     } finally {
       await _out.close();
     }
@@ -77,19 +110,19 @@ class NetDiag {
         final s = await Socket.connect(host, port, timeout: const Duration(seconds: 4));
         _socket = s;
         sw.stop();
-        _out.add('TCP $host:$port: открыт, ${sw.elapsedMilliseconds} мс');
+        _out.add(DiagLine(DiagMessage.portOpen, {'target': '$host:$port', 'ms': '${sw.elapsedMilliseconds}'}));
         s.destroy();
       } on SocketException catch (e) {
-        _out.add('TCP $host:$port: ${e.osError?.message ?? e.message}');
+        _out.add(DiagLine.raw('TCP $host:$port: ${e.osError?.message ?? e.message}'));
       } catch (e) {
-        _out.add('TCP $host:$port: $e');
+        _out.add(DiagLine.raw('TCP $host:$port: $e'));
       }
       if (i < 3 && !_stopped) await Future<void>.delayed(const Duration(milliseconds: 500));
     }
   }
 
   Future<void> _run(List<String> cmd) async {
-    _out.add('\$ ${cmd.join(' ')}');
+    _out.add(DiagLine.raw('\$ ${cmd.join(' ')}'));
     try {
       final p = (!kIsWeb && Platform.isWindows)
           ? await Process.start('cmd', ['/c', 'chcp 65001 >nul & ${cmd.join(' ')}'])
@@ -104,17 +137,17 @@ class NetDiag {
           .transform(const LineSplitter())
           .where((l) => l.trim().isNotEmpty);
       await Future.wait([
-        lines.forEach(_out.add),
-        err.forEach(_out.add),
+        lines.forEach((l) => _out.add(DiagLine.raw(l))),
+        err.forEach((l) => _out.add(DiagLine.raw(l))),
       ]);
       final code = await p.exitCode;
       if (_stopped) {
-        _out.add('[остановлено]');
+        _out.add(const DiagLine(DiagMessage.stopped));
       } else if (code != 0) {
-        _out.add('[завершено с кодом $code]');
+        _out.add(DiagLine(DiagMessage.exitCode, {'code': '$code'}));
       }
     } catch (e) {
-      _out.add('Не удалось запустить команду: $e');
+      _out.add(DiagLine(DiagMessage.cannotRun, {'detail': '$e'}));
     }
   }
 

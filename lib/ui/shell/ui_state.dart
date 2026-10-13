@@ -1,9 +1,9 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/services/settings_controller.dart';
-import '../../domain/services/tabs_controller.dart';
-import '../../infra/platform/desktop_env.dart';
+import '../../app/controllers/settings_controller.dart';
+import '../../app/controllers/tabs_controller.dart';
+import '../../app/settings/window_chrome.dart';
 
 /// Раздел главной вкладки: 0 - хосты, 1 - настройки.
 final homeSectionProvider = NotifierProvider<HomeSection, int>(HomeSection.new);
@@ -43,5 +43,5 @@ class SftpPaneState extends Notifier<Set<String>> {
 /// Используется ли сейчас свой заголовок окна (с кнопками свернуть/закрыть).
 final customTitleBarProvider = Provider<bool>((ref) {
   final mode = ref.watch(settingsProvider.select((s) => s.titleBarMode));
-  return DesktopEnv.useCustomTitleBar(mode);
+  return useCustomTitleBar(mode);
 });

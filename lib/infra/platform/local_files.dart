@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../../domain/models/local_file_failure.dart';
+
 /// Работа с локальными файлами и системными приложениями.
 class LocalFiles {
   LocalFiles._();
@@ -44,10 +46,13 @@ class LocalFiles {
         'subDir': subDir,
         'mimeType': mimeType,
       });
-      if (uri == null) throw const FileSystemException('пустой ответ системы');
+      if (uri == null) throw const LocalFileFailure(LocalFileError.publishFailed);
       return uri;
     } on PlatformException catch (e) {
-      throw FileSystemException('Не удалось сохранить в Download: ${e.message ?? e.code}');
+      if (e.code == 'PERMISSION_DENIED') {
+        throw const LocalFileFailure(LocalFileError.storagePermissionDenied);
+      }
+      throw LocalFileFailure(LocalFileError.publishFailed, {'detail': e.message ?? e.code});
     }
   }
 
@@ -117,7 +122,7 @@ class LocalFiles {
   static String childPath(String dir, String name) {
     final path = join(dir, name);
     if (!isWithin(dir, path)) {
-      throw FileSystemException('Недопустимое имя файла с сервера', name);
+      throw LocalFileFailure(LocalFileError.badRemoteName, {'name': name});
     }
     return path;
   }
@@ -224,7 +229,7 @@ class LocalFiles {
         environment: {'VYSH_OPEN_PATH': path},
       );
       if (r.exitCode != 0) {
-        throw FileSystemException('Не удалось открыть файл: ${'${r.stderr}'.trim()}', path);
+        throw LocalFileFailure(LocalFileError.openFailed, {'detail': '${r.stderr}'.trim()});
       }
     } else if (Platform.isMacOS) {
       await Process.start('open', [path], mode: ProcessStartMode.detached);
@@ -251,15 +256,4 @@ class LocalFiles {
       }
     } catch (_) {}
   }
-}
-
-String formatBytes(num bytes) {
-  const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
-  var v = bytes.toDouble();
-  var i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return i == 0 ? '${v.round()} ${units[i]}' : '${v.toStringAsFixed(v < 10 ? 1 : 0)} ${units[i]}';
 }

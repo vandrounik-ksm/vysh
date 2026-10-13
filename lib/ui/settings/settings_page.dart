@@ -1,15 +1,17 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../infra/platform/capabilities.dart';
+import '../widgets/strings_context.dart';
 import '../../app/version.dart';
-import '../../domain/models/app_settings.dart';
-import '../../domain/models/app_strings.dart';
-import '../../domain/services/settings_controller.dart';
+import '../../app/settings/app_settings.dart';
+import '../../l10n/app_strings.dart';
+import '../../app/controllers/settings_controller.dart';
 import '../../infra/platform/desktop_env.dart';
 import '../../infra/platform/local_files.dart';
 import '../../infra/storage/app_paths.dart';
@@ -307,11 +309,32 @@ class SettingsPage extends ConsumerWidget {
                                   ),
                                 ),
                               const SizedBox(height: 4),
-                              if (!kIsWeb) const _MemoryUsage(),
+                              if (PlatformCapabilities.memoryInfo) const _MemoryUsage(),
                             ],
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.gavel_outlined, size: 18),
+                        label: Text(strings.thirdPartyLicenses),
+                        // Тексты лицензий всех пакетов Flutter собирает в сборку сам
+                        // (NOTICES); палитра Catppuccin добавлена в main.dart.
+                        onPressed: () => showLicensePage(
+                          context: context,
+                          applicationName: 'vysh',
+                          applicationVersion: appVersion,
+                          applicationLegalese: 'GNU GPL v3 or later (GPL-3.0-or-later)\n'
+                              '© vyto4ka and contributors',
+                          applicationIcon: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Image.asset('assets/icon/vysh_256.png', width: 48, height: 48),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -388,13 +411,13 @@ class _MemoryUsageState extends State<_MemoryUsage> {
         Flexible(
           child: Text(
             kDebugMode
-                ? 'Память: $mb МБ (debug)'
-                : 'Память: $mb МБ',
+                ? context.strings.memoryUsage(mb, debug: true)
+                : context.strings.memoryUsage(mb, debug: false),
             style: style,
           ),
         ),
         IconButton(
-          tooltip: 'Обновить',
+          tooltip: context.strings.refresh,
           visualDensity: VisualDensity.compact,
           iconSize: 16,
           icon: const Icon(Icons.refresh),

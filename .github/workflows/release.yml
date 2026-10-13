@@ -66,6 +66,7 @@ jobs:
       - run: flutter build linux --release --dart-define="BUILD_DATE=$(date -u '+%d.%m.%y %H:%M:%S')"
       - name: Упаковать tar.gz
         run: |
+          cp LICENSE build/linux/x64/release/bundle/LICENSE
           cd build/linux/x64/release/bundle
           tar -czf "$GITHUB_WORKSPACE/vysh-${GITHUB_REF_NAME}-linux-x64.tar.gz" .
       - uses: actions/upload-artifact@v4
@@ -93,6 +94,7 @@ jobs:
           foreach ($dll in "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll") {
             Copy-Item "C:/Windows/System32/$dll" $dir
           }
+          Copy-Item LICENSE $dir  # текст GPL прикладывается к каждой копии
           Compress-Archive -Path "$dir/*" `
             -DestinationPath "vysh-$env:GITHUB_REF_NAME-windows-x64.zip"
       - uses: actions/upload-artifact@v4

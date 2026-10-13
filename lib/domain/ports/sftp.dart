@@ -37,15 +37,50 @@ class RemoteEntry {
   }
 }
 
-/// Что именно не получилось - чтобы код не разбирал текст сообщения.
-enum SftpFailureCode { noSuchFile, permissionDenied, notADirectory, exists, other }
+/// Что именно не получилось. Код не разбирает текст сообщения, а текст для
+/// пользователя собирает `l10n` по коду и [SftpFailure.args].
+enum SftpFailureCode {
+  noSuchFile,
+  permissionDenied,
+
+  /// args: path.
+  notADirectory,
+
+  /// args: path.
+  isDirectory,
+  exists,
+
+  /// args: detail (может отсутствовать).
+  failed,
+  unsupported,
+
+  /// Канал SFTP не ответил: на сервере, скорее всего, нет sftp-server.
+  noSftpServer,
+
+  /// args: detail.
+  sftpUnavailable,
+  noConnection,
+  connectionClosed,
+
+  /// args: detail.
+  localFile,
+
+  /// args: detail.
+  connection,
+
+  /// args: seconds.
+  stalled,
+
+  /// args: code (номер статуса SFTP), detail (может отсутствовать).
+  other,
+}
 
 class SftpFailure implements Exception {
-  const SftpFailure(this.message, {this.code = SftpFailureCode.other});
-  final String message;
+  const SftpFailure(this.code, [this.args = const {}]);
   final SftpFailureCode code;
+  final Map<String, String> args;
   @override
-  String toString() => message;
+  String toString() => args.isEmpty ? 'SftpFailure(${code.name})' : 'SftpFailure(${code.name}, $args)';
 }
 
 class TransferCancelled implements Exception {

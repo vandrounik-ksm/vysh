@@ -6,10 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../infra/platform/capabilities.dart';
 import '../../infra/platform/color_sources.dart';
-import '../models/app_settings.dart';
-import '../models/catppuccin.dart';
-import '../models/external_colors.dart';
+import '../settings/app_settings.dart';
+import '../../domain/models/catppuccin.dart';
+import '../../domain/models/external_colors.dart';
 import 'settings_controller.dart';
 
 /// Внешние цвета (акцент системы / доты) с обновлением на лету.
@@ -55,7 +56,9 @@ class ExternalColorsController extends Notifier<ExternalColors?> {
           notFound = false;
           return null;
         }
-        _reload(() => (!kIsWeb && Platform.isWindows) ? ColorSources.windowsAccent() : ColorSources.portalAccent());
+        _reload(() => PlatformCapabilities.registryAccent
+            ? ColorSources.windowsAccent()
+            : ColorSources.portalAccent());
         _watchSystem();
       case ColorSource.dots:
         if (kIsWeb) {
@@ -112,7 +115,7 @@ class ExternalColorsController extends Notifier<ExternalColors?> {
 
   void _watchSystem() {
     if (kIsWeb) return;
-    if (Platform.isWindows) {
+    if (PlatformCapabilities.registryAccent) {
       // Акцент меняют в «Параметрах» - значит, наше окно в это время не в фокусе.
       // Перечитываем реестр, когда окно снова получает фокус, плюс запасной опрос
       // с интервалом из настроек.
@@ -120,7 +123,7 @@ class ExternalColorsController extends Notifier<ExternalColors?> {
       _poll();
       return;
     }
-    if (!Platform.isLinux) return;
+    if (!PlatformCapabilities.portalAccent) return;
     // Linux: слушаем сигнал SettingChanged портала, плюс редкий опрос на всякий случай.
     Process.start('gdbus', [
       'monitor', '--session',

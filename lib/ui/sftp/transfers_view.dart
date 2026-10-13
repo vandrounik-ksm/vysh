@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/services/transfer_queue.dart';
+import '../../app/controllers/transfer_queue.dart';
+import '../../app/controllers/settings_controller.dart';
 import '../../infra/platform/local_files.dart';
+import '../../l10n/app_strings.dart';
 
 /// Список передач вкладки внизу SFTP-панели.
 class TransfersView extends ConsumerWidget {
@@ -13,6 +15,7 @@ class TransfersView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final all = ref.watch(transferQueueProvider).where((t) => t.tabId == tabId).toList();
+    final s = AppStrings.of(context, ref.watch(settingsProvider.select((s) => s.language)));
     if (all.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
@@ -43,12 +46,12 @@ class TransfersView extends ConsumerWidget {
                 Icon(Icons.swap_vert, size: 16, color: scheme.onSurfaceVariant),
                 const SizedBox(width: 6),
                 Text(
-                  active > 0 ? 'Передачи: $active в работе' : 'Передачи завершены',
+                  active > 0 ? s.transfersActive(active) : s.transfersDone,
                   style: theme.textTheme.labelMedium,
                 ),
                 if (failed > 0) ...[
                   const SizedBox(width: 8),
-                  Text('ошибок: $failed',
+                  Text(s.transfersFailed(failed),
                       style: theme.textTheme.labelMedium?.copyWith(color: scheme.error)),
                 ],
                 const Spacer(),
@@ -56,13 +59,13 @@ class TransfersView extends ConsumerWidget {
                   TextButton(
                     style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
                     onPressed: () => queue.cancelAllForTab(tabId),
-                    child: const Text('Отменить все'),
+                    child: Text(s.cancelAll),
                   ),
                 if (all.length > active)
                   TextButton(
                     style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
                     onPressed: () => queue.clearFinished(tabId),
-                    child: const Text('Очистить'),
+                    child: Text(s.clearList),
                   ),
               ],
             ),
@@ -75,6 +78,7 @@ class TransfersView extends ConsumerWidget {
               itemBuilder: (context, i) => _TransferRow(
                 t: shown[i],
                 onCancel: () => queue.cancel(shown[i].id),
+                strings: s,
               ),
             ),
           ),
@@ -85,10 +89,11 @@ class TransfersView extends ConsumerWidget {
 }
 
 class _TransferRow extends StatelessWidget {
-  const _TransferRow({required this.t, required this.onCancel});
+  const _TransferRow({required this.t, required this.onCancel, required this.strings});
 
   final Transfer t;
   final VoidCallback onCancel;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -97,28 +102,28 @@ class _TransferRow extends StatelessWidget {
     final up = t.direction == TransferDirection.upload;
 
     final String info = switch (t.status) {
-      TransferStatus.queued => 'в очереди',
+      TransferStatus.queued => strings.queued,
       TransferStatus.running => t.total > 0
-          ? '${formatBytes(t.done)} из ${formatBytes(t.total)} · ${formatBytes(t.bytesPerSecond)}/с'
-          : formatBytes(t.done),
-      TransferStatus.done => formatBytes(t.total),
-      TransferStatus.failed => t.error ?? 'ошибка',
-      TransferStatus.cancelled => 'отменено',
+          ? strings.progressOf(strings.bytes(t.done), strings.bytes(t.total), strings.bytes(t.bytesPerSecond))
+          : strings.bytes(t.done),
+      TransferStatus.done => strings.bytes(t.total),
+      TransferStatus.failed => t.error == null ? strings.failedLower : strings.errorText(t.error!),
+      TransferStatus.cancelled => strings.cancelledLower,
     };
 
     final Widget trailing = switch (t.status) {
       TransferStatus.queued || TransferStatus.running => IconButton(
-          tooltip: 'Отменить',
+          tooltip: strings.cancel,
           iconSize: 16,
           visualDensity: VisualDensity.compact,
           onPressed: onCancel,
           icon: const Icon(Icons.close),
         ),
       TransferStatus.done => IconButton(
-          tooltip: up ? 'Готово' : 'Показать в папке',
+          tooltip: up ? strings.done : strings.showInFolder,
           iconSize: 16,
           visualDensity: VisualDensity.compact,
-          onPressed: up ? null : () => LocalFiles.reveal(t.localPath),
+          onPressed: up ? null : () => LocalFiles.reveal(t.publishedUri ?? t.localPath),
           icon: Icon(up ? Icons.check : Icons.folder_open, color: Colors.green.shade500),
         ),
       TransferStatus.failed => Padding(

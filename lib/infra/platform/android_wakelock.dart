@@ -2,22 +2,33 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-abstract final class AndroidWakeLock {
+import '../../domain/ports/background_sessions.dart';
+
+/// Android: foreground-сервис с уведомлением держит процесс, пока есть
+/// живые сессии (wake lock сервис берёт сам). На остальных платформах - ничего.
+class AndroidBackgroundSessions implements BackgroundSessions {
+  const AndroidBackgroundSessions();
+
   static const _channel = MethodChannel('uwu.vyto4ka.vysh/wakelock');
 
-  static Future<void> acquire({String? title}) async {
-    if (kIsWeb) return;
+  static bool get _android {
+    if (kIsWeb) return false;
     try {
-      if (!Platform.isAndroid) return;
-      await _channel.invokeMethod<bool>('acquire', {'title': title ?? 'SSH подключен'});
-    } catch (_) {}
+      return Platform.isAndroid;
+    } catch (_) {
+      return false;
+    }
   }
 
-  static Future<void> release() async {
-    if (kIsWeb) return;
-    try {
-      if (!Platform.isAndroid) return;
-      await _channel.invokeMethod<bool>('release');
-    } catch (_) {}
+  @override
+  void active(String title) {
+    if (!_android) return;
+    _channel.invokeMethod<bool>('acquire', {'title': title}).catchError((_) => false);
+  }
+
+  @override
+  void idle() {
+    if (!_android) return;
+    _channel.invokeMethod<bool>('release').catchError((_) => false);
   }
 }

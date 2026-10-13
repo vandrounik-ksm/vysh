@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/models/app_settings.dart';
-import '../../domain/models/app_strings.dart';
-import '../../domain/services/settings_controller.dart';
+import '../../app/settings/app_settings.dart';
+import '../../l10n/app_strings.dart';
+import '../../app/controllers/settings_controller.dart';
 import '../../infra/platform/desktop_env.dart';
 import 'setting_row.dart';
 

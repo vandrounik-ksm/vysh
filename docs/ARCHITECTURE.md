@@ -97,7 +97,7 @@
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-Правило зависимостей: **UI → Domain ← Infrastructure.** Domain не знает ни про Flutter-виджеты, ни про конкретные библиотеки.
+Правило зависимостей: **UI → Domain ← Infrastructure.** Domain не знает ни про Flutter-виджеты, ни про конкретные библиотеки. В коде между UI и Domain есть слой app (связывание и контроллеры), см. раздел 7.
 
 ### 3.1 Сущности
 - **Host** - id, label, address, port, username, auth (password | key | agent), keyRef, secretRef, groupId, tags, color, icon, startupCommand, lastConnectedAt.
@@ -216,36 +216,33 @@
 
 ## 7. Структура репозитория
 
+Как устроено сейчас (план - в разделах выше). Направление зависимостей:
+**ui → app → domain ← infra**; `test/architecture_test.dart` проверяет его на каждом прогоне тестов.
+
 ```
 vysh/
   lib/
-    main.dart
-    app/                # AppShell, роутинг, хоткеи, палитра команд
-    ui/
-      hosts/            # главная, карточки, редактор хоста
-      terminal/         # вкладка терминала
-      sftp/             # файловая панель, очередь передач
-      settings/
-      theme/            # M3-тема, построение ColorScheme
-      widgets/          # общие компоненты
-    domain/
-      models/           # Host, Group, Session, Tab, Transfer, Theme
-      services/         # HostRepository, SessionManager, TransferQueue, ...
-      ports/            # интерфейсы: SshTransport, SftpClient, TerminalEngine, SecretStore
-    infra/
-      ssh/              # dartssh2
-      terminal/         # xterm2
-      secrets/          # keyring, vault
-      storage/          # JSON
-      platform/         # окно, источники тем (portal, pywal, matugen, caelestia, windows)
-  test/
-  linux/ windows/       # платформенные раннеры Flutter
-  assets/fonts/         # Nerd Font для терминала
-  themes/
-    presets/            # встроенные темы
-    templates/          # шаблоны для matugen / wallust / pywal
-  packaging/            # конфиги fastforge, AppImage, deb, AUR, Inno Setup
-  .github/workflows/    # CI
+    main.dart             # запуск: папка профиля, окно, ProviderScope
+    domain/               # только dart: - без Flutter-виджетов, Riverpod и библиотек
+      models/             # Host, SessionTab, ExternalColors, Catppuccin, ошибки локальных файлов
+      ports/              # SSH/SFTP, SecretStore, DocumentStore, BackgroundSessions, SessionPrompts
+      services/           # known_hosts, разбор нагрузки сервера
+    app/                  # связывание и логика приложения (Riverpod), без виджетов
+      dependencies.dart   # порты → реализации из infra (тесты переопределяют)
+      controllers/        # хосты, настройки, вкладки, очередь передач, цвета
+      terminal/           # сессия (SSH + xterm2), вход на сервер, ввод с клавиатуры
+      sftp/               # действия с файлами, содержимое папки, локальное редактирование
+      settings/           # AppSettings, режим заголовка окна
+    l10n/                 # все строки RU/EN; ошибки приходят кодами и собираются здесь
+    infra/                # реализации портов: dartssh2, keyring, JSON-файлы, платформа
+    ui/                   # экраны и виджеты
+  test/                   # регрессии ревью, слои, локализация, контроллеры
+  third_party/xterm2/     # xterm2 5.2.0 + vysh.patch (tools/xterm2/verify.sh)
+  linux/ windows/ android/
+  themes/templates/       # шаблоны для matugen / wallust
+  packaging/arch/         # PKGBUILD
+  tools/                  # сборка, релиз, демо-стенд, проверка xterm2
+  .github/workflows/      # CI и релизы
   docs/
 ```
 

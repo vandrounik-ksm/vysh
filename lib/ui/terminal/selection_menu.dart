@@ -1,101 +1,9 @@
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../domain/models/app_settings.dart';
-
-/// Локализованные строки для контекстного меню keyboard на русском и английском.
-class SelectionStrings {
-  const SelectionStrings({required this.isRussian});
-
-  final bool isRussian;
-
-  static SelectionStrings of(
-    BuildContext context, [
-    AppLanguage language = AppLanguage.auto,
-  ]) {
-    if (language == AppLanguage.ru) {
-      return const SelectionStrings(isRussian: true);
-    }
-    if (language == AppLanguage.en) {
-      return const SelectionStrings(isRussian: false);
-    }
-
-    final loc =
-        Localizations.maybeLocaleOf(context) ??
-        (ui.PlatformDispatcher.instance.locales.isNotEmpty
-            ? ui.PlatformDispatcher.instance.locales.first
-            : ui.PlatformDispatcher.instance.locale);
-    final code = loc.languageCode.toLowerCase();
-    final isRu =
-        code.startsWith('ru') || code.startsWith('be') || code.startsWith('uk');
-
-    return SelectionStrings(isRussian: isRu);
-  }
-
-  String get copy => isRussian ? 'Копировать' : 'Copy';
-  String get paste => isRussian ? 'Вставить' : 'Paste';
-  String get cut => isRussian ? 'Вырезать' : 'Cut';
-
-  String get selectLine => isRussian ? 'Выбрать строку' : 'Select line';
-  String get selectAll => selectLine;
-  String get eraseLine => isRussian ? 'Стереть строку' : 'Erase line';
-
-  String get share => isRussian ? 'Поделиться' : 'Share';
-  String get reset => isRussian ? 'Сброс (^C)' : 'Reset (^C)';
-  String get clear => isRussian ? 'Очистить (^L)' : 'Clear (^L)';
-  String get sftp => isRussian ? 'Файлы (SFTP)' : 'Files (SFTP)';
-  String get log => isRussian ? 'Журнал' : 'Log';
-  String get reconnect => isRussian ? 'Переподключить' : 'Reconnect';
-  String get deselect => isRussian ? 'Снять выделение' : 'Deselect';
-  String get more => isRussian ? 'Ещё' : 'More';
-  String get terminal => isRussian ? 'Терминал' : 'Terminal';
-  String get emptyArea => isRussian ? 'Терминал' : 'Terminal';
-  String get selectedText => isRussian ? 'Текст' : 'Text';
-
-  String charCount(int count) => isRussian ? '$count симв.' : '$count chars';
-
-  String copiedToast(int count) => isRussian
-      ? 'Скопировано в буфер ($count симв.)'
-      : 'Copied to clipboard ($count chars)';
-
-  String cutToast(int count) => isRussian
-      ? 'Вырезано в буфер ($count симв.)'
-      : 'Cut to clipboard ($count chars)';
-
-  String get pastedToast => isRussian ? 'Вставлено' : 'Pasted';
-
-  String get nothingToCopy =>
-      isRussian ? 'Нет текста для копирования' : 'No text to copy';
-
-  String get resetToast => isRussian
-      ? 'Отправлен сигнал прерывания (^C)'
-      : 'Interrupt signal sent (^C)';
-
-  String get clearToast => isRussian ? 'Экран очищен' : 'Screen cleared';
-
-  String multilineTitle(int count) =>
-      isRussian ? 'Вставить $count строк?' : 'Paste $count lines?';
-
-  String get multilineDesc => isRussian
-      ? 'Каждая строка выполнится как отдельная команда.'
-      : 'Each line will execute as a separate command.';
-
-  String get cancel => isRussian ? 'Отмена' : 'Cancel';
-
-  String get pasteSingleLine => isRussian ? 'Одной строкой' : 'Single line';
-
-  String get pasteConfirm => isRussian ? 'Вставить' : 'Paste';
-
-  String get trailingEnterTitle =>
-      isRussian ? 'Вставить с переводом строки?' : 'Paste with a line break?';
-
-  String get trailingEnterDesc => isRussian
-      ? 'Текст заканчивается переводом строки: команда выполнится сразу после вставки.'
-      : 'The text ends with a line break: the command will run right after pasting.';
-}
+import '../../l10n/app_strings.dart';
 
 /// Что именно будет вставлено в терминал.
 class PastePlan {
@@ -155,7 +63,7 @@ class SelectionMenu extends StatefulWidget {
   final bool hasSelection;
   final bool isEmptySpace;
   final int selectedCharCount;
-  final SelectionStrings strings;
+  final AppStrings strings;
 
   final VoidCallback onCopy;
   final VoidCallback onPaste;

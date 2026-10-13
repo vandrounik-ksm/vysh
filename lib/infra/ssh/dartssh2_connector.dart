@@ -26,7 +26,8 @@ class DartSsh2Connector implements SshConnector {
 
   @override
   Future<SshTransport> connect(SshConnectRequest r) async {
-    void log(String line, [bool debug = false]) => r.onLog?.call(line, debug);
+    void log(SshStep step, [Map<String, String> args = const {}]) =>
+        r.onLog?.call(SshLogEvent(step, args));
 
     // Отмена (закрыли вкладку): обрываем то, что сейчас идёт, - TCP-попытку
     // или SSH-клиент - не дожидаясь таймаутов.
@@ -38,14 +39,14 @@ class DartSsh2Connector implements SshConnector {
         f();
       }
     });
-    const cancelledFailure = SshFailure(SshFailureKind.cancelled, 'Отменено');
+    const cancelledFailure = SshFailure(SshError.cancelled);
     void checkCancelled() {
       if (cancelled) throw cancelledFailure;
     }
 
     final identities = <SSHKeyPair>[];
     for (final key in r.keys) {
-      log('Ключ: ${key.label}');
+      log(SshStep.key, {'key': key.label});
       identities.addAll(await _parseKey(key));
     }
     checkCancelled();
@@ -54,17 +55,14 @@ class DartSsh2Connector implements SshConnector {
     // Порядок адресов общий с проверкой доступности (IPv4 первым).
     final List<InternetAddress> targets;
     final literal = InternetAddress.tryParse(r.address) != null;
-    if (!literal) log('Поиск адреса «${r.address}» (DNS)…');
+    if (!literal) log(SshStep.dnsLookup, {'host': r.address});
     try {
       targets = await resolveHost(r.address, timeout: r.timeout);
-      if (!literal) log('DNS: ${targets.map((a) => a.address).join(', ')}');
+      if (!literal) log(SshStep.dnsResult, {'addresses': targets.map((a) => a.address).join(', ')});
     } catch (e) {
-      log('DNS: ошибка: $e');
+      log(SshStep.dnsError, {'detail': '$e'});
       checkCancelled();
-      throw SshFailure(
-        SshFailureKind.network,
-        'Не удалось найти хост «${r.address}»: имя не разрешается через DNS',
-      );
+      throw SshFailure(SshError.dnsFailed, {'host': r.address});
     }
     checkCancelled();
 
@@ -73,7 +71,7 @@ class DartSsh2Connector implements SshConnector {
     Socket? raw;
     Object? lastError;
     for (final addr in targets.take(maxAddressAttempts)) {
-      log('TCP-подключение к ${addr.address}:${r.port}…');
+      log(SshStep.tcpConnect, {'address': addr.address, 'port': '${r.port}'});
       final sw = Stopwatch()..start();
       ConnectionTask<Socket>? task;
       void abort() => task?.cancel();
@@ -84,18 +82,18 @@ class DartSsh2Connector implements SshConnector {
           task?.cancel();
           throw TimeoutException('TCP', r.timeout);
         });
-        log('TCP-соединение с ${addr.address} установлено за ${sw.elapsedMilliseconds} ms');
+        log(SshStep.tcpConnected, {'address': addr.address, 'ms': '${sw.elapsedMilliseconds}'});
         break;
       } catch (e) {
         checkCancelled();
-        log('TCP: ${addr.address}: ошибка: $e');
+        log(SshStep.tcpError, {'address': addr.address, 'detail': '$e'});
         lastError = e;
       } finally {
         onCancel.remove(abort);
       }
     }
     if (raw == null) {
-      throw SshFailure(SshFailureKind.network, _networkMessage(lastError ?? 'нет адресов', r));
+      throw _networkFailure(lastError, r);
     }
     if (cancelled) {
       raw.destroy();
@@ -118,7 +116,7 @@ class DartSsh2Connector implements SshConnector {
       if (authDone || waitingForUser > 0) return;
       watchdog = Timer(r.authTimeout, () {
         timedOut = true;
-        log('Сервер не ответил за ${r.authTimeout.inSeconds} с');
+        log(SshStep.serverSilent, {'seconds': '${r.authTimeout.inSeconds}'});
         client.close();
         socket.destroy();
       });
@@ -142,31 +140,30 @@ class DartSsh2Connector implements SshConnector {
       onPasswordRequest: r.password == null
           ? null
           : () {
-              log('Вход по паролю для ${r.username}…');
+              log(SshStep.passwordAuth, {'user': r.username});
               return askUser(r.password!);
             },
       onUserInfoRequest: r.interactive == null
           ? null
           : (req) {
-              log(
-                'keyboard-interactive: ${req.prompts.map((p) => p.promptText.trim()).join(' | ')}',
-              );
+              log(SshStep.keyboardInteractive,
+                  {'prompts': req.prompts.map((p) => p.promptText.trim()).join(' | ')});
               return askUser(() => r.interactive!(req.name, req.instruction, [
                     for (final p in req.prompts) (text: p.promptText, echo: p.echo),
                   ]));
             },
       onVerifyHostKey: (type, fingerprint) async {
         final fp = utf8.decode(fingerprint);
-        log('Сервер: ${client.remoteVersion ?? 'неизвестно'}');
-        log('Ключ сервера: $type $fp');
+        log(SshStep.serverVersion, {'version': client.remoteVersion ?? '?'});
+        log(SshStep.hostKey, {'type': type, 'fingerprint': fp});
         final ok = await askUser(() => r.verifyHostKey(type, fp));
-        log(ok ? 'Ключ сервера принят' : 'Ключ сервера отклонён');
+        log(ok ? SshStep.hostKeyAccepted : SshStep.hostKeyRejected);
         if (!ok) hostKeyRejected = true;
         return ok;
       },
       onUserauthBanner: r.onBanner,
-      onAuthenticated: () => log('Вход выполнен'),
-      printDebug: (line) => log(line ?? '', true),
+      onAuthenticated: () => log(SshStep.authenticated),
+      printDebug: (line) => log(SshStep.debug, {'text': line ?? ''}),
       keepAliveInterval: r.keepAliveInterval <= Duration.zero
           ? null
           : r.keepAliveInterval,
@@ -183,13 +180,10 @@ class DartSsh2Connector implements SshConnector {
       closeClient();
       if (cancelled) return cancelledFailure;
       if (timedOut) {
-        return SshFailure(
-          SshFailureKind.network,
-          'Сервер не ответил при входе (${r.authTimeout.inSeconds} с)',
-        );
+        return SshFailure(SshError.authTimeout, {'seconds': '${r.authTimeout.inSeconds}'});
       }
       if (hostKeyRejected) {
-        return const SshFailure(SshFailureKind.hostKey, 'Ключ сервера отклонён');
+        return const SshFailure(SshError.hostKeyRejected);
       }
       return f;
     }
@@ -197,21 +191,15 @@ class DartSsh2Connector implements SshConnector {
     try {
       await client.authenticated;
     } on SSHAuthFailError catch (e) {
-      log('Аутентификация: ${e.message}');
-      throw failure(const SshFailure(
-        SshFailureKind.auth,
-        'Сервер отклонил логин, пароль или ключ',
-      ));
+      log(SshStep.authFailed, {'detail': e.message});
+      throw failure(const SshFailure(SshError.authRejected));
     } on SSHAuthAbortError catch (e) {
-      log('Прервано: ${e.message}${e.reason == null ? '' : ' (${e.reason})'}');
       final reason = e.reason;
-      throw failure(SshFailure(
-        SshFailureKind.network,
-        'Соединение прервано до входа${reason == null ? '' : ': $reason'}',
-      ));
+      log(SshStep.aborted, {'detail': reason == null ? e.message : '${e.message} ($reason)'});
+      throw failure(SshFailure(SshError.abortedBeforeAuth, {if (reason != null) 'detail': '$reason'}));
     } on SSHError catch (e) {
-      log('Ошибка SSH: $e');
-      throw failure(SshFailure(SshFailureKind.other, 'Ошибка SSH: $e'));
+      log(SshStep.sshError, {'detail': '$e'});
+      throw failure(SshFailure(SshError.protocol, {'detail': '$e'}));
     } finally {
       authDone = true;
       watchdog?.cancel();
@@ -237,31 +225,24 @@ class DartSsh2Connector implements SshConnector {
         return parse();
       }
     } on SSHKeyDecryptError {
-      throw SshFailure(
-        SshFailureKind.keyPassphrase,
-        'Неверная парольная фраза для ключа ${key.label}',
-      );
+      throw SshFailure(SshError.wrongPassphrase, {'key': key.label});
     } on ArgumentError {
-      throw SshFailure(
-        SshFailureKind.keyPassphrase,
-        'Для ключа ${key.label} нужна парольная фраза',
-      );
+      throw SshFailure(SshError.passphraseRequired, {'key': key.label});
     } catch (e) {
-      throw SshFailure(
-        SshFailureKind.config,
-        'Не удалось прочитать ключ ${key.label}: $e',
-      );
+      throw SshFailure(SshError.keyUnreadable, {'key': key.label, 'detail': '$e'});
     }
   }
 
-  String _networkMessage(Object e, SshConnectRequest r) {
+  SshFailure _networkFailure(Object? e, SshConnectRequest r) {
     final target = '${r.address}:${r.port}';
-    if (e is TimeoutException) return 'Нет ответа от $target (таймаут)';
-    if (e is SocketException) {
-      final msg = e.osError?.message ?? e.message;
-      return 'Не удалось подключиться к $target: $msg';
-    }
-    return 'Не удалось подключиться к $target: $e';
+    if (e is TimeoutException) return SshFailure(SshError.tcpTimeout, {'target': target});
+    final detail = switch (e) {
+      SocketException(:final osError?) => osError.message.trim(),
+      SocketException(:final message) => message,
+      null => '-',
+      _ => '$e',
+    };
+    return SshFailure(SshError.tcpFailed, {'target': target, 'detail': detail});
   }
 }
 
@@ -284,7 +265,7 @@ class _Transport implements SshTransport {
       );
       return _Shell(session);
     } on SSHError catch (e) {
-      throw SshFailure(SshFailureKind.other, 'Сервер не открыл оболочку: $e');
+      throw SshFailure(SshError.shellFailed, {'detail': '$e'});
     }
   }
 
@@ -299,7 +280,7 @@ class _Transport implements SshTransport {
     try {
       return DartSsh2Sftp(await _client.sftp());
     } on SSHError catch (e) {
-      throw SftpFailure('Сервер не поддерживает SFTP: $e');
+      throw SftpFailure(SftpFailureCode.sftpUnavailable, {'detail': '$e'});
     }
   }
 

@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/models/app_strings.dart';
+import '../../l10n/app_strings.dart';
 import '../../domain/models/host.dart';
 import '../../domain/ports/ssh_transport.dart';
-import '../../domain/services/hosts_controller.dart';
-import '../../domain/services/settings_controller.dart';
-import '../../domain/services/terminal_session.dart';
+import '../../app/controllers/hosts_controller.dart';
+import '../../app/controllers/settings_controller.dart';
+import '../../app/terminal/terminal_session.dart';
 import '../../infra/platform/desktop_env.dart';
 import '../../infra/platform/net_diag.dart';
 import '../hosts/host_editor.dart';
@@ -36,8 +36,8 @@ class _ConnectionFailureViewState extends ConsumerState<ConnectionFailureView> {
   bool _verbose = false;
   NetDiag? _diag;
   DiagKind? _diagKind;
-  final _diagLines = <String>[];
-  StreamSubscription<String>? _diagSub;
+  final _diagLines = <DiagLine>[];
+  StreamSubscription<DiagLine>? _diagSub;
   bool _diagRunning = false;
 
   @override
@@ -72,20 +72,20 @@ class _ConnectionFailureViewState extends ConsumerState<ConnectionFailureView> {
 
   String _two(int v, [int w = 2]) => v.toString().padLeft(w, '0');
 
-  String _logText({bool withDebug = true}) {
+  String _logText(AppStrings strings, {bool withDebug = true}) {
     final b = StringBuffer()
       ..writeln('vysh: connection log for ${_host.displayAddress}');
     for (final e in widget.session.connLog) {
       if (e.debug && !withDebug) continue;
       final t = e.time;
       b.writeln('${_two(t.hour)}:${_two(t.minute)}:${_two(t.second)}.${_two(t.millisecond, 3)}'
-          '${e.error ? ' ✗' : e.debug ? ' ·' : '  '} ${e.text}');
+          '${e.error ? ' ✗' : e.debug ? ' ·' : '  '} ${e.text(strings)}');
     }
     if (_diagLines.isNotEmpty) {
       b
         ..writeln()
         ..writeln('Diagnostics (${_diagKind?.name}):')
-        ..writeAll(_diagLines, '\n');
+        ..writeAll(_diagLines.map((l) => _diagText(l, strings)), '\n');
     }
     return b.toString();
   }
@@ -220,7 +220,7 @@ class _ConnectionFailureViewState extends ConsumerState<ConnectionFailureView> {
                         color: scheme.errorContainer.withValues(alpha: 0.45),
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: SelectableText(failure.message,
+                      child: SelectableText(strings.sshFailure(failure),
                           style: TextStyle(color: scheme.onErrorContainer, fontWeight: FontWeight.w500)),
                     ),
                   const SizedBox(height: 10),
@@ -291,7 +291,7 @@ class _ConnectionFailureViewState extends ConsumerState<ConnectionFailureView> {
                             )
                           : null,
                       child: SelectableText(
-                        _diagLines.isEmpty ? (strings.isRu ? 'Запуск…' : 'Running…') : _diagLines.join('\n'),
+                        _diagLines.isEmpty ? (strings.isRu ? 'Запуск…' : 'Running…') : _diagLines.map((l) => _diagText(l, strings)).join('\n'),
                         style: monoStyle(context, size: 12.5, color: scheme.onSurface),
                       ),
                     ),
@@ -311,7 +311,7 @@ class _ConnectionFailureViewState extends ConsumerState<ConnectionFailureView> {
                           tooltip: strings.isRu ? 'Скопировать журнал' : 'Copy log',
                           icon: const Icon(Icons.copy, size: 18),
                           onPressed: () {
-                            Clipboard.setData(ClipboardData(text: _logText()));
+                            Clipboard.setData(ClipboardData(text: _logText(strings)));
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text(strings.isRu ? 'Журнал скопирован' : 'Log copied')),
                             );
@@ -324,7 +324,7 @@ class _ConnectionFailureViewState extends ConsumerState<ConnectionFailureView> {
                         for (final e in entries)
                           TextSpan(
                             text: '${_two(e.time.hour)}:${_two(e.time.minute)}:${_two(e.time.second)}.'
-                                '${_two(e.time.millisecond, 3)}  ${e.text}\n',
+                                '${_two(e.time.millisecond, 3)}  ${e.text(strings)}\n',
                             style: monoStyle(
                               context,
                               size: 12,
@@ -387,4 +387,29 @@ class _Panel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Строка сетевой диагностики на языке интерфейса.
+String _diagText(DiagLine l, AppStrings s) {
+  final m = l.message;
+  if (m == null) return l.raw ?? '';
+  String a(String k) => l.args[k] ?? '';
+  final ru = s.isRu;
+  return switch (m) {
+    DiagMessage.unavailable => ru
+        ? 'Сетевая диагностика через системные утилиты недоступна в веб-версии.'
+        : 'Network diagnostics with system tools are not available in the web version.',
+    DiagMessage.badAddress => ru ? 'Недопустимый адрес: ${a('host')}' : 'Invalid address: ${a('host')}',
+    DiagMessage.noTraceroute => ru
+        ? 'Не найден ни traceroute, ни tracepath. Установите пакет traceroute.'
+        : 'Neither traceroute nor tracepath found. Install the traceroute package.',
+    DiagMessage.failed => ru ? 'Ошибка диагностики: ${a('detail')}' : 'Diagnostics error: ${a('detail')}',
+    DiagMessage.portOpen => ru
+        ? 'TCP ${a('target')}: открыт, ${a('ms')} мс'
+        : 'TCP ${a('target')}: open, ${a('ms')} ms',
+    DiagMessage.stopped => ru ? '[остановлено]' : '[stopped]',
+    DiagMessage.exitCode => ru ? '[завершено с кодом ${a('code')}]' : '[exited with code ${a('code')}]',
+    DiagMessage.cannotRun =>
+      ru ? 'Не удалось запустить команду: ${a('detail')}' : 'Could not run the command: ${a('detail')}',
+  };
 }

@@ -142,26 +142,3 @@ class ServerStatsSampler {
   static final _virtual =
       RegExp(r'^(lo|veth|docker|br-|virbr|cni|flannel|cali|lxc|kube|vnet|tap)');
 }
-
-/// 1536 → «1.5 КБ».
-String formatBytes(num bytes, {required bool ru}) {
-  const ruU = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
-  const enU = ['B', 'KB', 'MB', 'GB', 'TB'];
-  final units = ru ? ruU : enU;
-  var v = bytes.toDouble();
-  var i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  final text = v >= 100 || i == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
-  return '$text ${units[i]}';
-}
-
-/// 5 д 3 ч / 3 ч 12 мин / 12 мин.
-String formatUptime(Duration d, {required bool ru}) {
-  final days = d.inDays, hours = d.inHours % 24, mins = d.inMinutes % 60;
-  if (days > 0) return ru ? '$days д $hours ч' : '${days}d ${hours}h';
-  if (hours > 0) return ru ? '$hours ч $mins мин' : '${hours}h ${mins}m';
-  return ru ? '$mins мин' : '${mins}m';
-}

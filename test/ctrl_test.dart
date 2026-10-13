@@ -1,31 +1,56 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vysh/domain/services/terminal_session.dart';
+import 'package:vysh/app/terminal/terminal_input.dart';
 
 void main() {
-  group('TerminalSession Ctrl combinations', () {
-    test('mapToCtrlChar maps all English letters to uppercase', () {
-      expect(TerminalSession.mapToCtrlChar('c'), 'C');
-      expect(TerminalSession.mapToCtrlChar('C'), 'C');
-      expect(TerminalSession.mapToCtrlChar('a'), 'A');
-      expect(TerminalSession.mapToCtrlChar('z'), 'Z');
-      expect(TerminalSession.mapToCtrlChar('d'), 'D');
-      expect(TerminalSession.mapToCtrlChar('u'), 'U');
-      expect(TerminalSession.mapToCtrlChar('l'), 'L');
+  group('Ctrl-комбинации', () {
+    test('латиница - в верхний регистр', () {
+      for (final c in ['c', 'C', 'a', 'z', 'd', 'u', 'l']) {
+        expect(TerminalInput.ctrlLetter(c), c.toUpperCase());
+      }
     });
 
-    test('mapToCtrlChar maps Cyrillic letters to QWERTY Latin', () {
-      expect(TerminalSession.mapToCtrlChar('с'), 'C'); // Cyrillic s -> C
-      expect(TerminalSession.mapToCtrlChar('С'), 'C');
-      expect(TerminalSession.mapToCtrlChar('в'), 'D'); // Cyrillic v -> D
-      expect(TerminalSession.mapToCtrlChar('я'), 'Z'); // Cyrillic ya -> Z
-      expect(TerminalSession.mapToCtrlChar('г'), 'U'); // Cyrillic g -> U
-      expect(TerminalSession.mapToCtrlChar('д'), 'L'); // Cyrillic d -> L
-      expect(TerminalSession.mapToCtrlChar('ф'), 'A'); // Cyrillic f -> A
+    test('русская раскладка - по положению клавиши', () {
+      expect(TerminalInput.ctrlLetter('с'), 'C');
+      expect(TerminalInput.ctrlLetter('С'), 'C');
+      expect(TerminalInput.ctrlLetter('в'), 'D');
+      expect(TerminalInput.ctrlLetter('я'), 'Z');
+      expect(TerminalInput.ctrlLetter('г'), 'U');
+      expect(TerminalInput.ctrlLetter('д'), 'L');
+      expect(TerminalInput.ctrlLetter('ф'), 'A');
     });
 
-    test('mapToCtrlChar ignores numbers or invalid symbols', () {
-      expect(TerminalSession.mapToCtrlChar('1'), isNull);
-      expect(TerminalSession.mapToCtrlChar(''), isNull);
+    test('цифры и пустая строка - не комбинации', () {
+      expect(TerminalInput.ctrlLetter('1'), isNull);
+      expect(TerminalInput.ctrlLetter(''), isNull);
+    });
+
+    test('управляющие байты', () {
+      expect(TerminalInput.ctrlByte('c'), 3);
+      expect(TerminalInput.ctrlByte('с'), 3); // русская «с»
+      expect(TerminalInput.ctrlByte('['), 27);
+      expect(TerminalInput.ctrlByte(' '), 0);
+      expect(TerminalInput.ctrlByte('1'), isNull);
+    });
+  });
+
+  group('набранная команда', () {
+    test('ввод, Backspace, ^W, Enter', () {
+      final t = TypedCommand()..feed('ls -la /tmp');
+      expect(t.text, 'ls -la /tmp');
+      t.feed('\x7f\x7f');
+      expect(t.text, 'ls -la /t');
+      t.feed('\x17');
+      expect(t.text, 'ls -la ');
+      t.feed('\r');
+      expect(t.text, '');
+    });
+
+    test('^C и ^U очищают строку', () {
+      final t = TypedCommand()..feed('echo hi');
+      t.feed('\x03');
+      expect(t.text, '');
+      t.feed('abc\x15');
+      expect(t.text, '');
     });
   });
 }

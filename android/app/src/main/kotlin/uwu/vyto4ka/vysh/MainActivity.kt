@@ -31,7 +31,7 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "acquire" -> {
-                    val title = call.argument<String>("title") ?: "SSH подключен"
+                    val title = call.argument<String>("title") ?: getString(R.string.ssh_connected)
                     result.success(SshForegroundService.start(this, title))
                 }
                 "release" -> {
@@ -79,9 +79,16 @@ class MainActivity : FlutterActivity() {
                             Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS)
                         } else {
                             Intent(Intent.ACTION_VIEW).apply {
+                                // Приходит либо путь, либо URI опубликованного файла.
                                 val path = call.argument<String>("path") ?: ""
+                                val file = if (path.startsWith("file://")) {
+                                    java.io.File(Uri.parse(path).path ?: "")
+                                } else {
+                                    java.io.File(path)
+                                }
+                                val dir = if (file.isDirectory) file else file.parentFile ?: file
                                 setDataAndType(
-                                    Uri.fromFile(java.io.File(path)),
+                                    Uri.fromFile(dir),
                                     DocumentsContract.Document.MIME_TYPE_DIR
                                 )
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -164,7 +171,7 @@ class MainActivity : FlutterActivity() {
         val waiting = pendingSaves.toList()
         pendingSaves.clear()
         for ((_, result) in waiting) {
-            result.error("SAVE_ERROR", "Приложение закрыто", null)
+            result.error("SAVE_ERROR", "Activity destroyed", null)
         }
         super.onDestroy()
     }
@@ -194,7 +201,7 @@ class MainActivity : FlutterActivity() {
             } else {
                 result.error(
                     "PERMISSION_DENIED",
-                    "Нет разрешения на запись в папку Download",
+                    "WRITE_EXTERNAL_STORAGE denied",
                     null
                 )
             }
@@ -243,11 +250,11 @@ class MainActivity : FlutterActivity() {
             }
             val resolver = contentResolver
             val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                ?: throw IllegalStateException("MediaStore не создал запись")
+                ?: throw IllegalStateException("MediaStore insert failed")
             try {
                 resolver.openOutputStream(uri)?.use { out ->
                     temp.inputStream().use { it.copyTo(out) }
-                } ?: throw IllegalStateException("MediaStore не открыл файл на запись")
+                } ?: throw IllegalStateException("MediaStore output stream failed")
                 val done = android.content.ContentValues().apply {
                     put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
                 }
@@ -267,7 +274,7 @@ class MainActivity : FlutterActivity() {
         )
         val dir = if (cleanSub.isEmpty()) root else java.io.File(root, cleanSub)
         if (!dir.exists() && !dir.mkdirs()) {
-            throw java.io.IOException("Не удалось создать папку ${dir.path}")
+            throw java.io.IOException("Cannot create directory ${dir.path}")
         }
         var target = java.io.File(dir, name)
         var i = 1

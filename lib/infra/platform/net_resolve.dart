@@ -10,7 +10,7 @@ Future<List<InternetAddress>> resolveHost(String host, {required Duration timeou
   final literal = InternetAddress.tryParse(host.replaceAll(RegExp(r'[\[\]]'), ''));
   if (literal != null) return [literal];
   final found = await InternetAddress.lookup(host).timeout(timeout);
-  if (found.isEmpty) throw const SocketException('пустой ответ DNS');
+  if (found.isEmpty) throw const SocketException('empty DNS answer');
   return [
     ...found.where((a) => a.type == InternetAddressType.IPv4),
     ...found.where((a) => a.type != InternetAddressType.IPv4),

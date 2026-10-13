@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:xterm2/xterm.dart';
 
-import '../../domain/models/app_settings.dart';
-import '../../domain/models/app_strings.dart';
-import '../../domain/services/terminal_session.dart';
+import '../widgets/strings_context.dart';
+import '../../app/settings/app_settings.dart';
+import '../../l10n/app_strings.dart';
+import '../../app/terminal/terminal_session.dart';
 import '../theme/app_theme.dart';
 
 /// Однострочная панель горячих клавиш терминала для мобильных устройств (как в keyboard).
@@ -298,7 +299,7 @@ class _TerminalAccessoryBarState extends State<TerminalAccessoryBar> {
                     ),
                     _KeyChip(
                       label: '^D',
-                      tooltip: 'EOF / Выход',
+                      tooltip: context.strings.eofExit,
                       onTap: () => widget.session.sendCtrlChar('D'),
                     ),
                     _KeyChip(

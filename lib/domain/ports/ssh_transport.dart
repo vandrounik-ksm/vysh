@@ -27,14 +27,135 @@ enum SshFailureKind {
   other,
 }
 
-class SshFailure implements Exception {
-  const SshFailure(this.kind, this.message);
+/// Что именно не получилось. Текст для пользователя собирает слой
+/// локализации (`l10n`) по коду и [SshFailure.args].
+enum SshError {
+  /// args: host.
+  dnsFailed(SshFailureKind.network),
 
+  /// args: target.
+  tcpTimeout(SshFailureKind.network),
+
+  /// args: target, detail.
+  tcpFailed(SshFailureKind.network),
+
+  /// args: seconds.
+  authTimeout(SshFailureKind.network),
+
+  /// args: detail (может отсутствовать).
+  abortedBeforeAuth(SshFailureKind.network),
+  connectionLost(SshFailureKind.network),
+  authRejected(SshFailureKind.auth),
+  tooManyAttempts(SshFailureKind.auth),
+  hostKeyRejected(SshFailureKind.hostKey),
+
+  /// args: key.
+  wrongPassphrase(SshFailureKind.keyPassphrase),
+
+  /// args: key.
+  passphraseRequired(SshFailureKind.keyPassphrase),
+
+  /// args: key, detail.
+  keyUnreadable(SshFailureKind.config),
+
+  /// args: path.
+  keyFileMissing(SshFailureKind.config),
+  puttyKey(SshFailureKind.config),
+  noDefaultKeys(SshFailureKind.config),
+  cancelled(SshFailureKind.cancelled),
+
+  /// args: detail.
+  shellFailed(SshFailureKind.other),
+
+  /// args: detail.
+  protocol(SshFailureKind.other),
+
+  /// args: detail.
+  unexpected(SshFailureKind.other);
+
+  const SshError(this.kind);
   final SshFailureKind kind;
-  final String message;
+}
+
+class SshFailure implements Exception {
+  const SshFailure(this.error, [this.args = const {}]);
+
+  final SshError error;
+
+  /// Подробности для текста: адрес, путь к ключу, сообщение ОС…
+  final Map<String, String> args;
+
+  SshFailureKind get kind => error.kind;
 
   @override
-  String toString() => message;
+  String toString() => args.isEmpty ? 'SshFailure(${error.name})' : 'SshFailure(${error.name}, $args)';
+}
+
+/// Шаг журнала подключения; текст строки собирает `l10n`.
+enum SshStep {
+  /// args: key.
+  key,
+
+  /// args: host.
+  dnsLookup,
+
+  /// args: addresses.
+  dnsResult,
+
+  /// args: detail.
+  dnsError,
+
+  /// args: address, port.
+  tcpConnect,
+
+  /// args: address, ms.
+  tcpConnected,
+
+  /// args: address, detail.
+  tcpError,
+
+  /// args: seconds.
+  serverSilent,
+
+  /// args: user.
+  passwordAuth,
+
+  /// args: prompts.
+  keyboardInteractive,
+
+  /// args: version.
+  serverVersion,
+
+  /// args: type, fingerprint.
+  hostKey,
+  hostKeyAccepted,
+  hostKeyRejected,
+  authenticated,
+
+  /// args: detail.
+  authFailed,
+
+  /// args: detail.
+  aborted,
+
+  /// args: detail.
+  sshError,
+
+  /// Отладочная строка dartssh2 как есть. args: text.
+  debug,
+}
+
+class SshLogEvent {
+  const SshLogEvent(this.step, [this.args = const {}]);
+
+  final SshStep step;
+  final Map<String, String> args;
+
+  bool get debug => step == SshStep.debug;
+  bool get error => switch (step) {
+        SshStep.dnsError || SshStep.tcpError || SshStep.authFailed || SshStep.sshError => true,
+        _ => false,
+      };
 }
 
 /// Приватный ключ для входа.
@@ -84,7 +205,7 @@ class SshConnectRequest {
   final void Function(String banner)? onBanner;
 
   /// Журнал подключения: шаг и признак «отладочная строка».
-  final void Function(String line, bool debug)? onLog;
+  final void Function(SshLogEvent event)? onLog;
 
   /// Завершается, когда попытку нужно прервать (закрыли вкладку):
   /// коннектор сразу закрывает сокет и бросает [SshFailureKind.cancelled].

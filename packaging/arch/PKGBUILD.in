@@ -10,7 +10,7 @@ pkgrel=1
 pkgdesc='Minimal SSH manager with tabs, terminal and SFTP (Material 3)'
 arch=('x86_64')
 url='https://github.com/vyto4ka/vysh'
-license=('unknown')  # заменить, когда в репозитории появится LICENSE
+license=('GPL-3.0-or-later')
 depends=('gtk3' 'libsecret' 'glibc' 'hicolor-icon-theme')
 optdepends=(
   'gnome-keyring: хранилище паролей (или KWallet / KeePassXC с Secret Service)'

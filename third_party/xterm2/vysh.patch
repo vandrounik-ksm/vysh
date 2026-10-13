@@ -1,0 +1,70 @@
+diff -ruN --strip-trailing-cr upstream/lib/src/terminal_view.dart patched/lib/src/terminal_view.dart
+--- upstream/lib/src/terminal_view.dart
++++ patched/lib/src/terminal_view.dart
+@@ -117,6 +117,8 @@
+     this.mouseCursor = SystemMouseCursors.text,
+     this.keyboardType = TextInputType.emailAddress,
+     this.keyboardAppearance = Brightness.dark,
++    this.enableSuggestions = false,
++    this.enableIMEPersonalizedLearning = false,
+     this.cursorType = TerminalCursorType.block,
+     this.alwaysShowCursor = false,
+     this.deleteDetection = false,
+@@ -193,6 +195,12 @@
+   /// This setting is only honored on iOS devices.
+   final Brightness keyboardAppearance;
+ 
++  /// vysh: передаётся в [CustomTextEdit].
++  final bool enableSuggestions;
++
++  /// vysh: передаётся в [CustomTextEdit]; false - анонимный режим клавиатуры.
++  final bool enableIMEPersonalizedLearning;
++
+   /// The type of cursor to use. [TerminalCursorType.block] by default.
+   final TerminalCursorType cursorType;
+ 
+@@ -476,6 +484,8 @@
+         inputType: widget.keyboardType,
+         keyboardAppearance: widget.keyboardAppearance,
+         deleteDetection: widget.deleteDetection,
++        enableSuggestions: widget.enableSuggestions,
++        enableIMEPersonalizedLearning: widget.enableIMEPersonalizedLearning,
+         onInsert: _onInsert,
+         onDelete: () {
+           _scrollToBottom();
+diff -ruN --strip-trailing-cr upstream/lib/src/ui/custom_text_edit.dart patched/lib/src/ui/custom_text_edit.dart
+--- upstream/lib/src/ui/custom_text_edit.dart
++++ patched/lib/src/ui/custom_text_edit.dart
+@@ -20,6 +20,8 @@
+     this.inputAction = TextInputAction.newline,
+     this.keyboardAppearance = Brightness.light,
+     this.deleteDetection = false,
++    this.enableSuggestions = false,
++    this.enableIMEPersonalizedLearning = false,
+   }) : viewId = viewId ?? PlatformDispatcher.instance.implicitView?.viewId {
+     if (this.viewId == null) {
+       throw Exception('Cannot open input connection without a valid viewId.');
+@@ -52,6 +54,12 @@
+ 
+   final bool deleteDetection;
+ 
++  /// vysh: подсказки клавиатуры. false - Flutter помечает поле как пароль.
++  final bool enableSuggestions;
++
++  /// vysh: false включает у Gboard и других клавиатур анонимный режим.
++  final bool enableIMEPersonalizedLearning;
++
+   final int? viewId;
+ 
+   @override
+@@ -172,8 +180,8 @@
+         inputAction: widget.inputAction,
+         keyboardAppearance: widget.keyboardAppearance,
+         autocorrect: false,
+-        enableSuggestions: false,
+-        enableIMEPersonalizedLearning: false,
++        enableSuggestions: widget.enableSuggestions,
++        enableIMEPersonalizedLearning: widget.enableIMEPersonalizedLearning,
+       );
+ 
+       _connection = TextInput.attach(this, config);

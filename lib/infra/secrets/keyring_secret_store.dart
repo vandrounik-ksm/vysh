@@ -11,9 +11,9 @@ class KeyringSecretStore implements SecretStore {
   Future<String?> read(String key) async {
     try {
       return await _storage.read(key: key);
-    } catch (_) {
+    } catch (e) {
       // Нет keyring-демона (голый WM без gnome-keyring/kwallet) и т.п.
-      return null;
+      throw SecretStoreUnavailable('$e');
     }
   }
 

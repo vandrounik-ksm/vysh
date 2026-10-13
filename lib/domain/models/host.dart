@@ -42,7 +42,7 @@ class Host {
     if (l.isNotEmpty) return l;
     final a = address.trim();
     if (a.isNotEmpty) return a;
-    return 'Сервер ${port == 22 ? '' : ':$port'}';
+    return port == 22 ? 'ssh' : 'ssh:$port';
   }
 
   String get displayAddress {
@@ -122,4 +122,15 @@ String newId() {
   final r = Random.secure();
   return List.generate(12, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0'))
       .join();
+}
+
+/// В поле адреса вставили `user@host:port` (или `host:port`) целиком -
+/// вернуть разобранный хост, чтобы разложить его по полям редактора.
+/// Срабатывает только на вставку (длина выросла больше чем на 2 символа),
+/// а не при наборе по одному символу.
+Host? pastedAddress(String value, {required int previousLength}) {
+  if (value.length - previousLength <= 2) return null;
+  final t = value.trim();
+  final looksQuick = t.contains('@') || RegExp(r'^[^:\[\]]+:\d+$').hasMatch(t);
+  return looksQuick ? Host.tryParseQuick(t) : null;
 }

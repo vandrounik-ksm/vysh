@@ -6,10 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'app/app.dart';
-import 'domain/models/app_settings.dart';
-import 'domain/services/ports_providers.dart';
-import 'infra/platform/desktop_env.dart';
+import 'ui/vysh_app.dart';
+import 'app/settings/app_settings.dart';
+import 'app/settings/window_chrome.dart';
+import 'app/dependencies.dart';
 import 'infra/platform/window_placement.dart';
 import 'infra/storage/app_paths.dart';
 import 'infra/storage/json_store.dart';
@@ -19,6 +19,11 @@ import 'ui/widgets/modifiers.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Modifiers.init();
+  // Палитра Catppuccin - данные, а не пакет: её лицензию Flutter сам не найдёт.
+  LicenseRegistry.addLicense(() => Stream.value(const LicenseEntryWithLineBreaks(
+        ['Catppuccin (palette)'],
+        _catppuccinLicense,
+      )));
   await AppPaths.init();
 
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
@@ -27,7 +32,7 @@ Future<void> main() async {
     // Настройки нужны до показа окна: от них зависит, чей будет заголовок.
     final raw = JsonStore('settings.json').readSync();
     final settings = raw is Map<String, Object?> ? AppSettings.fromJson(raw) : const AppSettings();
-    final custom = DesktopEnv.useCustomTitleBar(settings.titleBarMode);
+    final custom = useCustomTitleBar(settings.titleBarMode);
 
     // Движок уже выбран нативным кодом и передан в VYSH_RENDERER - запоминаем
     // фактический, чтобы настройки могли подсказать «нужен перезапуск».
@@ -66,3 +71,25 @@ Future<void> main() async {
     child: const VyshApp(),
   ));
 }
+
+const _catppuccinLicense = '''MIT License
+
+Copyright (c) 2021 Catppuccin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.''';

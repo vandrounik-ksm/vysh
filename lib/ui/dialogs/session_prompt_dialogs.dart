@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../app/settings/app_settings.dart';
 import '../../domain/models/host.dart';
 import '../../domain/ports/session_prompts.dart';
 import '../../domain/ports/ssh_transport.dart';
+import '../../l10n/app_strings.dart';
 import '../theme/app_theme.dart';
+import '../widgets/strings_context.dart';
 
 /// Диалоги, которые сессия показывает во время подключения.
 class DialogSessionPrompts implements SessionPrompts {
@@ -12,6 +15,11 @@ class DialogSessionPrompts implements SessionPrompts {
   final GlobalKey<NavigatorState> navigatorKey;
 
   BuildContext? get _ctx => navigatorKey.currentContext;
+
+  AppStrings get _strings {
+    final ctx = _ctx;
+    return ctx == null ? AppStrings.forLanguage(AppLanguage.auto) : ctx.strings;
+  }
 
   @override
   Future<bool> confirmHostKey(
@@ -30,10 +38,12 @@ class DialogSessionPrompts implements SessionPrompts {
         final theme = Theme.of(context);
         final scheme = theme.colorScheme;
         final mono = monoStyle(context, size: 12.5, color: scheme.onSurface);
+        final s = context.strings;
+        final target = '${host.address}:${host.port}';
         return AlertDialog(
           icon: Icon(changed ? Icons.gpp_maybe_rounded : Icons.fingerprint,
               color: changed ? scheme.error : scheme.primary, size: 32),
-          title: Text(changed ? 'Ключ сервера изменился!' : 'Новый сервер'),
+          title: Text(changed ? s.hostKeyChangedTitle : s.hostKeyNewTitle),
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: Column(
@@ -41,12 +51,7 @@ class DialogSessionPrompts implements SessionPrompts {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  changed
-                      ? 'Сервер ${host.address}:${host.port} предъявил другой ключ. '
-                          'Так бывает после переустановки системы, но может означать и '
-                          'перехват соединения. Подключайтесь, только если уверены.'
-                      : 'Подключение к ${host.address}:${host.port} впервые. '
-                          'Проверьте отпечаток ключа, если есть такая возможность.',
+                  changed ? s.hostKeyChangedText(target) : s.hostKeyNewText(target),
                   style: theme.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 16),
@@ -62,9 +67,9 @@ class DialogSessionPrompts implements SessionPrompts {
                       TextSpan(text: '$type\n',
                           style: mono.copyWith(color: scheme.onSurfaceVariant)),
                       if (changed) ...[
-                        TextSpan(text: 'было:  $previous\n',
+                        TextSpan(text: '${s.fingerprintWas}$previous\n',
                             style: mono.copyWith(color: scheme.onSurfaceVariant)),
-                        TextSpan(text: 'стало: $fingerprint',
+                        TextSpan(text: '${s.fingerprintNow}$fingerprint',
                             style: mono.copyWith(color: scheme.error)),
                       ] else
                         TextSpan(text: fingerprint),
@@ -77,7 +82,7 @@ class DialogSessionPrompts implements SessionPrompts {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Отмена'),
+              child: Text(context.strings.cancel),
             ),
             FilledButton(
               style: changed
@@ -85,7 +90,7 @@ class DialogSessionPrompts implements SessionPrompts {
                       backgroundColor: scheme.error, foregroundColor: scheme.onError)
                   : null,
               onPressed: () => Navigator.pop(context, true),
-              child: Text(changed ? 'Всё равно подключиться' : 'Доверять и подключиться'),
+              child: Text(changed ? s.connectAnyway : s.trustAndConnect),
             ),
           ],
         );
@@ -97,10 +102,10 @@ class DialogSessionPrompts implements SessionPrompts {
   @override
   Future<SecretAnswer?> askPassword(Host host, {bool retry = false, bool canRemember = true}) {
     return _askSecret(
-      title: 'Пароль',
+      title: _strings.passwordTitle,
       subtitle: host.displayAddress,
-      label: 'Пароль',
-      error: retry ? 'Неверный пароль, попробуйте ещё раз' : null,
+      label: _strings.passwordTitle,
+      error: retry ? _strings.wrongPasswordRetry : null,
       canRemember: canRemember,
     );
   }
@@ -108,10 +113,10 @@ class DialogSessionPrompts implements SessionPrompts {
   @override
   Future<SecretAnswer?> askPassphrase(Host host, String keyLabel, {bool retry = false}) {
     return _askSecret(
-      title: 'Парольная фраза ключа',
+      title: _strings.passphraseTitle,
       subtitle: keyLabel,
-      label: 'Парольная фраза',
-      error: retry ? 'Неверная парольная фраза' : null,
+      label: _strings.passphraseLabel,
+      error: retry ? _strings.wrongPassphrase : null,
       canRemember: true,
     );
   }
@@ -222,7 +227,7 @@ class _SecretDialogState extends State<_SecretDialog> {
                   borderSide: BorderSide.none,
                 ),
                 suffixIcon: IconButton(
-                  tooltip: _obscure ? 'Показать' : 'Скрыть',
+                  tooltip: _obscure ? context.strings.show : context.strings.hide,
                   icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
                   onPressed: () => setState(() => _obscure = !_obscure),
                 ),
@@ -235,15 +240,15 @@ class _SecretDialogState extends State<_SecretDialog> {
                 controlAffinity: ListTileControlAffinity.leading,
                 value: _remember,
                 onChanged: (v) => setState(() => _remember = v ?? false),
-                title: const Text('Сохранить в системном хранилище'),
+                title: Text(context.strings.saveInKeyring),
               ),
             ],
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-        FilledButton(onPressed: _submit, child: const Text('Подключиться')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.strings.cancel)),
+        FilledButton(onPressed: _submit, child: Text(context.strings.connect)),
       ],
     );
   }
@@ -315,8 +320,8 @@ class _InteractiveDialogState extends State<_InteractiveDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-        FilledButton(onPressed: _submit, child: const Text('Продолжить')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.strings.cancel)),
+        FilledButton(onPressed: _submit, child: Text(context.strings.continueAction)),
       ],
     );
   }

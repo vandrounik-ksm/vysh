@@ -1,0 +1,44 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+
+/// Что умеет текущая платформа - вместо разбросанных `Platform.is…`.
+/// Код спрашивает о возможности, а не об ОС: так видно, зачем проверка,
+/// и новую платформу достаточно описать здесь.
+///
+/// Поставляемые цели - Windows, Linux и Android; web и Apple-платформы
+/// в проверках встречаются, но готовой поддержкой не считаются.
+abstract final class PlatformCapabilities {
+  static bool _is(bool Function() check) {
+    if (kIsWeb) return false;
+    try {
+      return check();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Своё окно с управлением через window_manager (размер, заголовок).
+  static bool get desktopWindow => _is(() => Platform.isWindows || Platform.isLinux);
+
+  /// Края окна без системной рамки тянем сами (Linux; на Windows это делает система).
+  static bool get selfResizedWindow => _is(() => Platform.isLinux);
+
+  /// Акцент системы читается из реестра Windows.
+  static bool get registryAccent => _is(() => Platform.isWindows);
+
+  /// Акцент системы читается через xdg-desktop-portal.
+  static bool get portalAccent => _is(() => Platform.isLinux);
+
+  /// Цвета из файлов дотов (pywal, matugen, caelestia).
+  static bool get dotfileColors => _is(() => Platform.isLinux);
+
+  /// Скачанные файлы публикуются в общую папку Download (MediaStore).
+  static bool get sharedDownloads => _is(() => Platform.isAndroid);
+
+  /// Системные утилиты сети (ping, traceroute) и процессы.
+  static bool get processes => _is(() => !Platform.isAndroid && !Platform.isIOS);
+
+  /// Можно узнать расход памяти процесса (ProcessInfo).
+  static bool get memoryInfo => !kIsWeb;
+}

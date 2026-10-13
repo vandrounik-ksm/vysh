@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/host.dart';
-import '../ports/sftp.dart';
+import '../../domain/models/host.dart';
+import '../../domain/ports/sftp.dart';
 
 enum TransferDirection { upload, download }
 
@@ -22,19 +22,26 @@ class Transfer {
     this.status = TransferStatus.queued,
     this.error,
     this.bytesPerSecond = 0,
+    this.publishedUri,
   });
 
   final String id;
   final String tabId;
   final TransferDirection direction;
   final String name;
+  /// Путь к файлу на этом устройстве.
   final String localPath;
   final String remotePath;
   final int total;
   final int done;
   final TransferStatus status;
-  final String? error;
+  /// Ошибка передачи (SftpFailure и т. п.); текст собирает UI.
+  final Object? error;
   final double bytesPerSecond;
+
+  /// Android: URI копии в общей папке Download (content:// или file://) -
+  /// не путь в файловой системе, хранится отдельно от [localPath].
+  final String? publishedUri;
 
   bool get isActive => status == TransferStatus.queued || status == TransferStatus.running;
   double? get progress => total > 0 ? (done / total).clamp(0, 1).toDouble() : null;
@@ -42,22 +49,23 @@ class Transfer {
   Transfer copyWith({
     int? done,
     TransferStatus? status,
-    String? error,
+    Object? error,
     double? bytesPerSecond,
-    String? localPath,
+    String? publishedUri,
   }) =>
       Transfer(
         id: id,
         tabId: tabId,
         direction: direction,
         name: name,
-        localPath: localPath ?? this.localPath,
+        localPath: localPath,
         remotePath: remotePath,
         total: total,
         done: done ?? this.done,
         status: status ?? this.status,
         error: error ?? this.error,
         bytesPerSecond: bytesPerSecond ?? this.bytesPerSecond,
+        publishedUri: publishedUri ?? this.publishedUri,
       );
 }
 
@@ -147,14 +155,14 @@ class TransferQueue extends Notifier<List<Transfer>> {
     state = state.where((t) => t.tabId != tabId || t.isActive).toList();
   }
 
-  /// После публикации temp-файла в общую Download путь в карточке
-  /// передачи должен вести туда, где файл реально лежит.
-  void updatePath(String tabId, String fromPath, String toPath) {
+  /// Файл опубликован в общую Download (Android): карточка передачи должна
+  /// вести туда, где он теперь лежит.
+  void setPublished(String tabId, String localPath, String uri) {
     if (!ref.mounted) return;
     state = [
       for (final t in state)
-        t.tabId == tabId && t.localPath == fromPath
-            ? t.copyWith(localPath: toPath)
+        t.tabId == tabId && t.localPath == localPath
+            ? t.copyWith(publishedUri: uri)
             : t,
     ];
   }
@@ -206,7 +214,7 @@ class TransferQueue extends Notifier<List<Transfer>> {
         id,
         (t) => t.copyWith(
           status: cancelled ? TransferStatus.cancelled : TransferStatus.failed,
-          error: cancelled ? null : e.toString(),
+          error: cancelled ? null : e,
         ),
       );
     }).whenComplete(() {

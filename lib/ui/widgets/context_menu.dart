@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'strings_context.dart';
+
 /// Пункт меню Material 3 (MenuItemButton): иконка слева, сочетание клавиш справа.
 Widget menuItem(
   String label, {
@@ -82,13 +84,14 @@ class MenuIconButton extends StatelessWidget {
     super.key,
     required this.items,
     this.icon = Icons.more_vert,
-    this.tooltip = 'Ещё',
+    this.tooltip,
     this.enabled = true,
   });
 
   final List<Widget> items;
   final IconData icon;
-  final String tooltip;
+  /// null - «Ещё» на языке интерфейса.
+  final String? tooltip;
   final bool enabled;
 
   @override
@@ -96,7 +99,7 @@ class MenuIconButton extends StatelessWidget {
     return MenuAnchor(
       menuChildren: items,
       builder: (context, controller, _) => IconButton(
-        tooltip: tooltip,
+        tooltip: tooltip ?? context.strings.more,
         icon: Icon(icon),
         onPressed: !enabled
             ? null

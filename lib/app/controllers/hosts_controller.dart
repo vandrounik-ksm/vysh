@@ -5,15 +5,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../infra/platform/net_resolve.dart';
-import '../../infra/storage/json_store.dart';
-import '../models/host.dart';
-import '../ports/secret_store.dart';
-import 'ports_providers.dart';
+import '../../domain/models/host.dart';
+import '../../domain/ports/secret_store.dart';
+import '../dependencies.dart';
 
 final hostsProvider = NotifierProvider<HostsController, List<Host>>(HostsController.new);
 
+/// Хост сохранён, но с паролем что-то не так (системное хранилище недоступно).
+enum HostSaveWarning { passwordNotDeleted, passwordNotSaved }
+
 class HostsController extends Notifier<List<Host>> {
-  final _store = JsonStore('hosts.json');
+  late final _store = ref.read(documentStoreProvider('hosts.json'));
 
   @override
   List<Host> build() {
@@ -58,6 +60,41 @@ class HostsController extends Notifier<List<Host>> {
         debugPrint('vysh: не удалось удалить пароль хоста $id: $e');
       });
     }
+  }
+
+  /// Сохранить хост из редактора вместе с паролем.
+  ///
+  /// [password] - то, что введено в поле (пусто - не меняли), [remember] -
+  /// хранить ли пароль в системном хранилище, [previous] - хост до правки.
+  /// Если пароль сменили или убрали, открытые вкладки забывают старый,
+  /// чтобы не переподключаться с ним.
+  Future<HostSaveWarning?> saveWithPassword(
+    Host host, {
+    required String password,
+    required bool remember,
+    Host? previous,
+    required void Function(String hostId) forgetSessionPasswords,
+  }) async {
+    upsert(host);
+    if (previous != null && (password.isNotEmpty || !remember || host.auth != previous.auth)) {
+      forgetSessionPasswords(host.id);
+    }
+    final secrets = ref.read(secretStoreProvider);
+    if (host.auth != AuthMethod.password || !remember) {
+      // Пароль не нужен или его просили не хранить - убираем сохранённый.
+      try {
+        await secrets.delete(passwordKey(host.id));
+      } catch (_) {
+        return HostSaveWarning.passwordNotDeleted;
+      }
+    } else if (password.isNotEmpty) {
+      try {
+        await secrets.write(passwordKey(host.id), password);
+      } catch (_) {
+        return HostSaveWarning.passwordNotSaved;
+      }
+    }
+    return null;
   }
 
   /// Забыть сохранённые пароль и парольную фразу хоста.

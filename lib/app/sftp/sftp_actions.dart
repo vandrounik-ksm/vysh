@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
-import '../../infra/platform/desktop_env.dart';
+import '../../infra/platform/capabilities.dart';
 import '../../infra/platform/local_files.dart';
-import '../ports/sftp.dart';
-import 'terminal_session.dart';
-import 'transfer_queue.dart';
+import '../../l10n/app_strings.dart';
+import '../../domain/ports/sftp.dart';
+import '../terminal/terminal_session.dart';
+import '../controllers/transfer_queue.dart';
 
 /// Ответ на вопрос о файлах, которые уже есть на сервере:
 /// true - заменить, false - пропустить их, null - отменить загрузку.
@@ -98,7 +99,7 @@ class SftpActions {
       return;
     }
     if (!e.isDir) {
-      throw SftpFailure('$path существует и это не папка', code: SftpFailureCode.notADirectory);
+      throw SftpFailure(SftpFailureCode.notADirectory, {'path': path});
     }
   }
 
@@ -192,7 +193,7 @@ class SftpActions {
           } catch (_) {}
           rethrow;
         }
-        if (publishTo != null && DesktopEnv.isMobile && Platform.isAndroid) {
+        if (publishTo != null && PlatformCapabilities.sharedDownloads) {
           // На Android файл лежит во временной папке - переносим в общую
           // Download. Не получилось - это ошибка задачи, а не «готово».
           final published = await LocalFiles.saveToDownloads(
@@ -200,7 +201,7 @@ class SftpActions {
             local.path.split(RegExp(r'[\\/]')).last,
             subDir: publishTo,
           );
-          queue.updatePath(tabId, local.path, published);
+          queue.setPublished(tabId, local.path, published);
         }
       },
       onDone: onDone,
@@ -216,7 +217,7 @@ class SftpActions {
   Future<void> openLocally(
     RemoteEntry e, {
     required void Function(String name) onUploaded,
-    required void Function(String message) onError,
+    required void Function(String Function(AppStrings s) message) onError,
   }) async {
     final sftp = await _sftp;
     // Автозагрузка привязана к этому серверу: если хост в редакторе
@@ -263,7 +264,7 @@ class _LocalEdit implements LocalEditHandle {
   final Directory dir;
   final String target;
   final void Function(String name) onUploaded;
-  final void Function(String message) onError;
+  final void Function(String Function(AppStrings s) message) onError;
 
   StreamSubscription<FileSystemEvent>? _sub;
   Timer? _debounce;
@@ -279,7 +280,7 @@ class _LocalEdit implements LocalEditHandle {
       _debounce?.cancel();
       _debounce = Timer(const Duration(milliseconds: 700), _check);
     }, onError: (Object e) {
-      onError('Не удалось следить за изменениями «${entry.name}»: $e');
+      onError((s) => s.editWatchFailed(entry.name, e));
       close();
     });
   }
@@ -288,7 +289,7 @@ class _LocalEdit implements LocalEditHandle {
     if (_closed) return;
     final session = actions.session;
     if (session.isDisposed || session.target != target) {
-      onError('«${entry.name}»: адрес хоста изменился, автозагрузка остановлена');
+      onError((s) => s.editTargetChanged(entry.name));
       close();
       return;
     }
@@ -301,7 +302,7 @@ class _LocalEdit implements LocalEditHandle {
       if (_closed) return;
       actions._enqueueUpload(sftp, local, entry.path, () => onUploaded(entry.name));
     } catch (e) {
-      onError('«${entry.name}» не загружен на сервер: $e');
+      onError((s) => s.editUploadFailed(entry.name, e));
     }
   }
 

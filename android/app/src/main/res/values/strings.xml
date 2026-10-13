@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ssh_connected">SSH connected</string>
+    <string name="ssh_channel_name">SSH background connection</string>
+    <string name="ssh_channel_description">Keeps active SSH sessions alive in the background</string>
+    <string name="ssh_notification_text">Connection active in the background</string>
+</resources>

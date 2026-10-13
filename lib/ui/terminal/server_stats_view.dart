@@ -2,8 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_strings.dart';
 import '../../domain/services/server_stats.dart';
-import '../../domain/services/terminal_session.dart';
+import '../../app/terminal/terminal_session.dart';
 
 /// Нагрузка сервера в строке состояния: CPU, память, диск, сеть, аптайм.
 /// Опрашивает сервер, только пока вкладка на экране и окно не свёрнуто.
@@ -116,6 +117,7 @@ class _ServerStatsViewState extends State<ServerStatsView> {
     }
 
     final ru = widget.ru;
+    final strings = AppStrings(isRu: ru);
     String pct(double v) => '${(v * 100).round()}%';
     Color load(double v) => v >= 0.9
         ? scheme.error
@@ -137,7 +139,7 @@ class _ServerStatsViewState extends State<ServerStatsView> {
     }
 
     String rate(double? v) =>
-        v == null ? '…' : '${formatBytes(v, ru: ru)}/${ru ? 'с' : 's'}';
+        v == null ? '…' : '${strings.bytes(v)}/${ru ? 'с' : 's'}';
 
     return ClipRect(
       child: SingleChildScrollView(
@@ -152,7 +154,7 @@ class _ServerStatsViewState extends State<ServerStatsView> {
             ),
             item(
               Icons.memory_rounded,
-              '${ru ? 'ОЗУ' : 'RAM'} ${formatBytes(s.memUsed, ru: ru)} / ${formatBytes(s.memTotal, ru: ru)}',
+              '${ru ? 'ОЗУ' : 'RAM'} ${strings.bytes(s.memUsed)} / ${strings.bytes(s.memTotal)}',
               color: load(s.mem),
             ),
             if (s.disk != null)
@@ -160,13 +162,13 @@ class _ServerStatsViewState extends State<ServerStatsView> {
                 Icons.storage_rounded,
                 '${ru ? 'Диск' : 'Disk'} ${pct(s.disk!)}',
                 color: load(s.disk!),
-                tip: '/  ${formatBytes(s.diskUsed!, ru: ru)} / ${formatBytes(s.diskTotal!, ru: ru)}',
+                tip: '/  ${strings.bytes(s.diskUsed!)} / ${strings.bytes(s.diskTotal!)}',
               ),
             item(Icons.arrow_downward_rounded, rate(s.rxPerSec)),
             item(Icons.arrow_upward_rounded, rate(s.txPerSec)),
             item(
               Icons.schedule_rounded,
-              formatUptime(s.uptime, ru: ru),
+              strings.uptime(s.uptime),
               tip: ru ? 'Аптайм' : 'Uptime',
             ),
           ],

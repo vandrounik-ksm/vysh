@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../domain/models/app_strings.dart';
+import '../widgets/strings_context.dart';
+import '../../l10n/app_strings.dart';
 import '../../domain/models/session_tab.dart';
-import '../../domain/services/settings_controller.dart';
-import '../../domain/services/tabs_controller.dart';
+import '../../app/controllers/settings_controller.dart';
+import '../../app/controllers/tabs_controller.dart';
 import '../../infra/platform/desktop_env.dart';
 import '../widgets/context_menu.dart';
 import 'ui_state.dart';
@@ -234,7 +235,7 @@ class _SessionTabChipState extends State<_SessionTabChip> {
                       duration: const Duration(milliseconds: 120),
                       opacity: _hover || widget.selected ? 1 : 0,
                       child: IconButton(
-                        tooltip: DesktopEnv.isDesktop ? 'Закрыть (Ctrl+Shift+W)' : 'Закрыть',
+                        tooltip: DesktopEnv.isDesktop ? context.strings.closeWithShortcut : context.strings.close,
                         iconSize: 16,
                         visualDensity: VisualDensity.compact,
                         constraints: const BoxConstraints.tightFor(width: 28, height: 28),
@@ -294,10 +295,10 @@ class _StatusDot extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final (color, tip) = switch (status) {
-      SessionStatus.connecting => (scheme.tertiary, 'Подключение…'),
-      SessionStatus.ready => (Colors.green.shade500, 'Подключено'),
-      SessionStatus.lost => (scheme.error, 'Соединение потеряно'),
-      SessionStatus.closed => (scheme.outline, 'Закрыто'),
+      SessionStatus.connecting => (scheme.tertiary, context.strings.statusConnecting),
+      SessionStatus.ready => (Colors.green.shade500, context.strings.statusConnected),
+      SessionStatus.lost => (scheme.error, context.strings.statusLost),
+      SessionStatus.closed => (scheme.outline, context.strings.statusClosedShort),
     };
     return Tooltip(
       message: tip,

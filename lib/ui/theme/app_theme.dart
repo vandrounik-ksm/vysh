@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/models/external_colors.dart';
 import '../../infra/platform/desktop_env.dart';
 
-/// Предустановленные акцентные цвета (seed для Material You).
-const seedPresets = <(String, int)>[
-  ('Фиалка', 0xFF6750A4),
-  ('Океан', 0xFF0061A4),
-  ('Бирюза', 0xFF006A6A),
-  ('Мята', 0xFF2E7D5B),
-  ('Лайм', 0xFF5B6300),
-  ('Янтарь', 0xFF8B5000),
-  ('Коралл', 0xFFB3261E),
-  ('Сакура', 0xFF9C4068),
-  ('Графит', 0xFF5F6368),
+/// Предустановленные акцентные цвета (seed для Material You);
+/// названия - AppStrings.accentNames в том же порядке.
+const seedPresets = <int>[
+  0xFF6750A4, // фиалка
+  0xFF0061A4, // океан
+  0xFF006A6A, // бирюза
+  0xFF2E7D5B, // мята
+  0xFF5B6300, // лайм
+  0xFF8B5000, // янтарь
+  0xFFB3261E, // коралл
+  0xFF9C4068, // сакура
+  0xFF5F6368, // графит
 ];
 
 /// Цвета меток хостов.
@@ -145,3 +145,43 @@ TextStyle monoStyle(BuildContext context, {double size = 13, Color? color}) =>
       height: 1.35,
       color: color,
     );
+
+/// Накладывает готовые роли M3 на сгенерированную схему.
+ColorScheme applyRoles(ColorScheme s, Map<String, Color>? r) {
+  if (r == null || r.isEmpty) return s;
+  Color? c(String k) => r[k.toLowerCase()];
+  return s.copyWith(
+    primary: c('primary'),
+    onPrimary: c('onPrimary'),
+    primaryContainer: c('primaryContainer'),
+    onPrimaryContainer: c('onPrimaryContainer'),
+    secondary: c('secondary'),
+    onSecondary: c('onSecondary'),
+    secondaryContainer: c('secondaryContainer'),
+    onSecondaryContainer: c('onSecondaryContainer'),
+    tertiary: c('tertiary'),
+    onTertiary: c('onTertiary'),
+    tertiaryContainer: c('tertiaryContainer'),
+    onTertiaryContainer: c('onTertiaryContainer'),
+    error: c('error'),
+    onError: c('onError'),
+    errorContainer: c('errorContainer'),
+    onErrorContainer: c('onErrorContainer'),
+    surface: c('surface') ?? c('background'),
+    onSurface: c('onSurface') ?? c('onBackground'),
+    surfaceDim: c('surfaceDim'),
+    surfaceBright: c('surfaceBright'),
+    surfaceContainerLowest: c('surfaceContainerLowest'),
+    surfaceContainerLow: c('surfaceContainerLow'),
+    surfaceContainer: c('surfaceContainer'),
+    surfaceContainerHigh: c('surfaceContainerHigh'),
+    surfaceContainerHighest: c('surfaceContainerHighest'),
+    onSurfaceVariant: c('onSurfaceVariant'),
+    outline: c('outline'),
+    outlineVariant: c('outlineVariant'),
+    inverseSurface: c('inverseSurface'),
+    onInverseSurface: c('inverseOnSurface') ?? c('onInverseSurface'),
+    inversePrimary: c('inversePrimary'),
+    surfaceTint: c('surfaceTint'),
+  );
+}
