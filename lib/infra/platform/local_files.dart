@@ -13,9 +13,41 @@ class LocalFiles {
     if (kIsWeb) return '/Downloads';
     try {
       final env = Platform.environment;
-      return env['HOME'] ?? env['USERPROFILE'] ?? Directory.current.path;
+      var home = env['HOME'] ?? env['USERPROFILE'] ?? Directory.current.path;
+      if (!kIsWeb && Platform.isMacOS) {
+        // С включённым App Sandbox HOME указывает на контейнер приложения
+        // (.../Library/Containers/<bundle>/Data). Реальный домашний каталог
+        // пользователя ищем через NSHomeDirectory-подобный разбор USER:
+        // контейнер не трогаем только если настоящий дом недоступен.
+        home = _realMacHome(home, env) ?? home;
+      }
+      return home;
     } catch (_) {
       return '/Downloads';
+    }
+  }
+
+  /// Домашний каталог пользователя вне песочницы, если он доступен на запись.
+  static String? _realMacHome(String sandboxedHome, Map<String, String> env) {
+    String? candidate(String dir) {
+      final probe = File('$dir/.vysh_home_probe');
+      try {
+        probe.createSync(recursive: false);
+        probe.deleteSync();
+        return dir;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    try {
+      final home = env['HOME'] ?? sandboxedHome;
+      // .../Library/Containers/<bundle>/Data → обрезаем до корня пользователя.
+      final i = home.indexOf('/Library/Containers/');
+      final cut = i > 0 ? home.substring(0, i) : home;
+      return candidate(cut);
+    } catch (_) {
+      return null;
     }
   }
 

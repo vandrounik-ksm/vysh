@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 /// * Android: getApplicationDocumentsDirectory() / vysh
 /// * Windows: `%APPDATA%\vysh`
 /// * Linux: `$XDG_CONFIG_HOME/vysh` (обычно `~/.config/vysh`)
+/// * macOS: `getApplicationSupportDirectory()` / vysh (внутри App Sandbox)
 /// * переменная `VYSH_CONFIG_DIR` (ПК) задаёт свою папку
 class AppPaths {
   AppPaths._();
@@ -64,6 +65,12 @@ class AppPaths {
       if (Platform.isWindows) {
         final base = env['APPDATA'] ?? env['USERPROFILE'] ?? '.';
         return _join(base, 'vysh');
+      }
+      if (Platform.isMacOS) {
+        // App Sandbox: getApplicationSupportDirectory() лежит в контейнере
+        // приложения и всегда доступен на запись - хосты и настройки там.
+        final support = await getApplicationSupportDirectory();
+        return _join(support.path, 'vysh');
       }
       final xdg = env['XDG_CONFIG_HOME'];
       final base = (xdg != null && xdg.isNotEmpty)
