@@ -32,6 +32,12 @@ android {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
             }
+            // Все три схемы подписи. При minSdk >= 24 Gradle по умолчанию не ставит
+            // v1 (JAR), а часть сторонних установщиков читает сертификат только
+            // из неё и при обновлении пишет «отсутствующие сертификаты».
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 

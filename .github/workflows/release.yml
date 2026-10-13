@@ -152,6 +152,31 @@ jobs:
             abi=$(basename "$f" | sed -E 's/^app-(.+)-release\.apk$/\1/')
             cp "$f" "vysh-${GITHUB_REF_NAME}-android-${abi}.apk"
           done
+      - name: Проверить подпись APK
+        if: steps.key.outputs.ok == 'true'
+        env:
+          # Ожидаемый SHA-256 сертификата (Settings → Variables → ANDROID_CERT_SHA256).
+          # Не задан - проверяются только схемы подписи и отсутствие debug-ключа.
+          EXPECTED_CERT: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          bt=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          apksigner="$ANDROID_HOME/build-tools/$bt/apksigner"
+          for f in vysh-*-android-*.apk; do
+            out=$("$apksigner" verify --verbose --print-certs "$f")
+            echo "== $f"; echo "$out" | grep -E "Verified using|certificate (SHA-256|DN)"
+            for scheme in "v1 scheme (JAR signing)" "v2 scheme (APK Signature Scheme v2)"; do
+              echo "$out" | grep -q "Verified using $scheme: true" \
+                || { echo "::error::$f: нет подписи $scheme"; exit 1; }
+            done
+            if echo "$out" | grep -q "CN=Android Debug"; then
+              echo "::error::$f подписан debug-ключом"; exit 1
+            fi
+            if [ -n "$EXPECTED_CERT" ]; then
+              cert=$(echo "$out" | sed -nE 's/.*certificate SHA-256 digest: ([0-9a-f]+).*/\1/p' | head -1)
+              [ "$cert" = "$EXPECTED_CERT" ] \
+                || { echo "::error::$f: сертификат $cert, ожидался $EXPECTED_CERT"; exit 1; }
+            fi
+          done
       - uses: actions/upload-artifact@v4
         if: steps.key.outputs.ok == 'true'
         with:

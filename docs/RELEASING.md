@@ -90,6 +90,18 @@ certutil -encodehex -f vysh-release.jks jks.b64 0x40000001 && type jks.b64 | cli
 ```
 На Linux: `base64 -w0 vysh-release.jks | wl-copy` (или `xclip -sel c`).
 
+### Проверка подписи в CI
+
+APK подписывается схемами v1, v2 и v3 (`android/app/build.gradle.kts`): v1 нужна сторонним установщикам, которые читают сертификат только из неё. После сборки CI проверяет каждый APK через `apksigner` и не выпускает релиз, если нет подписи v1 или v2 или APK подписан debug-ключом.
+
+Чтобы CI сверял и сам сертификат, добавьте переменную (не секрет): Settings → Secrets and variables → Actions → **Variables** → `ANDROID_CERT_SHA256` = SHA-256 сертификата release-ключа, строчными буквами без двоеточий. Для текущего ключа это:
+
+```
+4955cb18b7420b605b3da651edeea1c20369b3f3d0fc23d0228d8688711afa4a
+```
+
+Посмотреть его у любого APK: `apksigner verify --print-certs файл.apk`, строка `certificate SHA-256 digest`.
+
 ### Локальная сборка APK
 
 `android/key.properties` (в .gitignore):

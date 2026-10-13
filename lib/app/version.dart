@@ -1,5 +1,5 @@
 /// Версия и метаданные сборки для «О программе».
 /// Версия и номер сборки совпадают с `version:` в pubspec.yaml (см. docs/RELEASING.md).
-const appVersion = '0.5.0';
-const vyshBuildNumber = 55;
+const appVersion = '0.5.1';
+const vyshBuildNumber = 56;
 const buildDate = String.fromEnvironment('BUILD_DATE', defaultValue: '');
