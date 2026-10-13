@@ -49,6 +49,7 @@ KINDS = [
     (".rpm", "Fedora / openSUSE", "RPM", "294172", "fedora", "white"),
     ("linux-x64.tar.gz", "Linux", "tar.gz", "333333", "linux", "white"),
     ("PKGBUILD", "Arch Linux", "PKGBUILD", "1793D1", "archlinux", "white"),
+    ("-macos.dmg", "macOS", "DMG", "999999", "apple", "black"),
     (".apk", "Android", "APK", "3DDC84", "android", "white"),
 ]
 
@@ -106,6 +107,8 @@ out.append(
     "**Android 8.0+:** большинству телефонов нужен `arm64-v8a`, старым 32-битным `armeabi-v7a`. "
     "Новая версия ставится поверх старой.\n\n"
     "**Linux:** распакуйте архив и запустите `./vysh` (нужны `libgtk-3` и `libsecret-1`).\n\n"
+    "**macOS 12+:** откройте dmg и перетащите vysh в Программы. При первом запуске "
+    "Gatekeeper может предупредить о неизвестном разработчике: ПКМ по vysh → «Открыть».\n\n"
     "**Обновление:** замените папку с программой: хосты, настройки и пароли хранятся отдельно и сохранятся."
 )
 if prev:
