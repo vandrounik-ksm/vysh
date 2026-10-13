@@ -162,7 +162,10 @@ jobs:
           bt=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
           apksigner="$ANDROID_HOME/build-tools/$bt/apksigner"
           for f in vysh-*-android-*.apk; do
-            out=$("$apksigner" verify --verbose --print-certs "$f")
+            # --min-sdk-version 23: иначе при minSdk >= 24 apksigner схему v1
+            # не проверяет вовсе и всегда пишет «v1 … false». Если v1 нет,
+            # verify с этим флагом завершится ошибкой (нет META-INF/MANIFEST.MF).
+            out=$("$apksigner" verify --min-sdk-version 23 --verbose --print-certs "$f")
             echo "== $f"; echo "$out" | grep -E "Verified using|certificate (SHA-256|DN)"
             for scheme in "v1 scheme (JAR signing)" "v2 scheme (APK Signature Scheme v2)"; do
               echo "$out" | grep -q "Verified using $scheme: true" \
