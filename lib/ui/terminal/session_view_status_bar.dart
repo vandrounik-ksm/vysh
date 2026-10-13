@@ -133,9 +133,11 @@ class _StatusBar extends StatelessWidget {
                         ? (strings.isRussian ? 'Консоль' : 'Console')
                         : (strings.isRussian ? 'Файлы' : 'Files'))
                   : (DesktopEnv.isDesktop
-                        ? (strings.isRussian
-                              ? 'Файлы  Ctrl+Shift+E'
-                              : 'Files  Ctrl+Shift+E')
+                        ? (PlatformCapabilities.isMacOS
+                              ? (strings.isRussian ? 'Файлы  ⌘E' : 'Files  ⌘E')
+                              : (strings.isRussian
+                                    ? 'Файлы  Ctrl+Shift+E'
+                                    : 'Files  Ctrl+Shift+E'))
                         : (strings.isRussian ? 'Файлы' : 'Files')),
             ),
           ),

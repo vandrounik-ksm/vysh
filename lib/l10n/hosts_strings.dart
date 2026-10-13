@@ -60,7 +60,12 @@ extension HostsStrings on AppStrings {
       : 'Could not save the password: the system keyring is unavailable';
 
   // Оболочка окна.
-  String get closeWithShortcut => isRu ? 'Закрыть (Ctrl+Shift+W)' : 'Close (Ctrl+Shift+W)';
+  String get closeWithShortcut {
+    final mac = Platform.isMacOS;
+    return isRu
+        ? 'Закрыть (${mac ? '⌘W' : 'Ctrl+Shift+W'})'
+        : 'Close (${mac ? '⌘W' : 'Ctrl+Shift+W'})';
+  }
   String get minimize => isRu ? 'Свернуть' : 'Minimize';
   String get restore => isRu ? 'Восстановить' : 'Restore';
   String get maximize => isRu ? 'Развернуть' : 'Maximize';

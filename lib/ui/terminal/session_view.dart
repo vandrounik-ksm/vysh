@@ -15,6 +15,7 @@ import '../../app/controllers/settings_controller.dart';
 import '../../app/controllers/tabs_controller.dart';
 import '../../infra/platform/local_files.dart';
 import '../../app/terminal/terminal_session.dart';
+import '../../infra/platform/capabilities.dart';
 import '../../infra/platform/desktop_env.dart';
 import '../sftp/sftp_pane.dart';
 import '../shell/ui_state.dart';
