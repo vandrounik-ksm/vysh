@@ -38,7 +38,6 @@ echo "==> Упаковка DMG"
 rm -rf "$STAGING"
 mkdir -p "$STAGING"
 cp -R "$APP_PATH" "$STAGING/vysh.app"
-cp LICENSE "$STAGING/LICENSE"
 ln -s /Applications "$STAGING/Applications"
 
 # Иконка тома.
@@ -65,7 +64,7 @@ hdiutil convert "$DMG_OUT" -format UDRW -ov -o "$RW_DMG" -quiet
 hdiutil attach "$RW_DMG" -mountpoint "$MOUNT" -quiet -nobrowse
 
 # Раскладка: окно 660x400, vysh.app слева, ссылка «Программы» справа,
-# LICENSE внизу по центру, тёмный фон, иконки 128.
+# иконки 128, тёмный фон. Лицензия остаётся внутри .app и в README.
 osascript <<APPLESCRIPT
 tell application "Finder"
   tell disk "$DISK_NAME"
@@ -76,9 +75,8 @@ tell application "Finder"
     set bounds of container window to {200, 120, 860, 520}
     set arrangement of the icon view options of container window to not arranged
     set icon size of the icon view options of container window to 128
-    set position of item "vysh" of container window to {160, 200}
-    set position of item "Applications" of container window to {500, 200}
-    set position of item "LICENSE" of container window to {330, 330}
+    set position of item "vysh" of container window to {160, 205}
+    set position of item "Applications" of container window to {500, 205}
     update without registering applications
     delay 2
     close
