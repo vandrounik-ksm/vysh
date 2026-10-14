@@ -229,8 +229,24 @@ class LocalFiles {
   /// Временная папка для открытия файлов во внешнем редакторе.
   /// Заодно убирает такие папки старше суток: сразу после закрытия вкладки
   /// их не удаляем, чтобы не отобрать файл у ещё открытого редактора.
+  ///
+  /// macOS: под App Sandbox системная tmp лежит в невидимом контейнере
+  /// приложения - файл, открытый «в редакторе», пропадал «вникуда».
+  /// Держим копию в системной «Загрузках» (vysh-edit-*, запись разрешена
+  /// entitlement'ом): пользователь её видит, и чистится она так же.
   static Future<Directory> editTempDir() async {
-    final base = Directory.systemTemp;
+    final Directory base;
+    if (!kIsWeb && Platform.isMacOS) {
+      final real = macRealHome();
+      final downloads = real != null ? join(real, 'Downloads') : null;
+      if (downloads != null && await Directory(downloads).exists()) {
+        base = Directory(downloads);
+      } else {
+        base = Directory.systemTemp;
+      }
+    } else {
+      base = Directory.systemTemp;
+    }
     try {
       final old = DateTime.now().subtract(const Duration(days: 1));
       await for (final e in base.list(followLinks: false)) {
