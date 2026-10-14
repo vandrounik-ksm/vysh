@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 
 # flutter может не быть в PATH интерактивной оболочки - ищем в типичных местах.
 if ! command -v flutter >/dev/null 2>&1; then
-  for d in "$HOME/development/flutter/bin" "$HOME/flutter/bin" "/opt/flutter/bin" "/usr/local/flutter/bin"; do
+  for d in "$HOME/flutter/bin" "$HOME/development/flutter/bin" "/opt/flutter/bin" "/usr/local/flutter/bin"; do
     if [ -x "$d/flutter" ]; then export PATH="$d:$PATH"; break; fi
   done
 fi
