@@ -13,39 +13,35 @@ class LocalFiles {
     if (kIsWeb) return '/Downloads';
     try {
       final env = Platform.environment;
-      var home = env['HOME'] ?? env['USERPROFILE'] ?? Directory.current.path;
-      if (!kIsWeb && Platform.isMacOS) {
-        // С включённым App Sandbox HOME указывает на контейнер приложения
-        // (.../Library/Containers/<bundle>/Data). Реальный домашний каталог
-        // пользователя ищем через NSHomeDirectory-подобный разбор USER:
-        // контейнер не трогаем только если настоящий дом недоступен.
-        home = _realMacHome(home, env) ?? home;
-      }
+      final home = env['HOME'] ?? env['USERPROFILE'] ?? Directory.current.path;
       return home;
     } catch (_) {
       return '/Downloads';
     }
   }
 
-  /// Домашний каталог пользователя вне песочницы, если он доступен на запись.
-  static String? _realMacHome(String sandboxedHome, Map<String, String> env) {
-    String? candidate(String dir) {
-      final probe = File('$dir/.vysh_home_probe');
-      try {
-        probe.createSync(recursive: false);
-        probe.deleteSync();
-        return dir;
-      } catch (_) {
-        return null;
-      }
-    }
-
+  /// macOS: настоящий домашний каталог пользователя вне контейнера
+  /// App Sandbox. Под песочницей HOME - путь контейнера, а USER -
+  /// короткое имя пользователя. Чтение (в т. ч. ~/.ssh) из него
+  /// разрешено; запись - только в разрешённые entitlements места
+  /// (Загрузки, выбранные пользователем папки).
+  static String? macRealHome() {
+    if (kIsWeb) return null;
     try {
-      final home = env['HOME'] ?? sandboxedHome;
-      // .../Library/Containers/<bundle>/Data → обрезаем до корня пользователя.
+      if (!Platform.isMacOS) return null;
+      final env = Platform.environment;
+      final user = env['USER'] ?? env['LOGNAME'];
+      if (user != null && user.isNotEmpty) {
+        final home = '/Users/$user';
+        if (Directory(home).existsSync()) return home;
+      }
+      final home = env['HOME'] ?? '';
       final i = home.indexOf('/Library/Containers/');
-      final cut = i > 0 ? home.substring(0, i) : home;
-      return candidate(cut);
+      if (i > 0) {
+        final cut = home.substring(0, i);
+        if (Directory(cut).existsSync()) return cut;
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -166,6 +162,18 @@ class LocalFiles {
     try {
       if (Platform.isAndroid) {
         return Directory.systemTemp.path;
+      }
+      if (Platform.isMacOS) {
+        // Настоящая папка Загрузок пользователя. App Sandbox с
+        // entitlement com.apple.security.files.downloads.read-write
+        // разрешает запись туда напрямую; HOME под песочницей
+        // указывает на контейнер - оттуда путь не годится.
+        final real = macRealHome();
+        if (real != null) {
+          final dir = join(real, 'Downloads');
+          if (Directory(dir).existsSync()) return dir;
+        }
+        return join(_home, 'Downloads');
       }
       if (Platform.isLinux) {
         // XDG_DOWNLOAD_DIR из ~/.config/user-dirs.dirs (бывает «Загрузки»).

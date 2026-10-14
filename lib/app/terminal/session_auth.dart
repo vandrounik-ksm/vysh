@@ -7,6 +7,7 @@ import '../../domain/ports/secret_store.dart';
 import '../../domain/ports/session_prompts.dart';
 import '../../domain/ports/ssh_transport.dart';
 import '../../domain/services/known_hosts.dart';
+import '../../infra/platform/local_files.dart';
 import '../../l10n/app_strings.dart';
 
 /// Сообщение для журнала или терминала на языке интерфейса.
@@ -253,12 +254,19 @@ bool isPasswordPrompt(String text) {
 }
 
 /// `~/...` → домашняя папка (на Windows - %USERPROFILE%).
+/// На macOS под App Sandbox - настоящий дом пользователя, не контейнер:
+/// ключи `~/.ssh/...` лежат именно там, и чтение разрешено песочницей.
 String expandHome(String path) {
   if (!path.startsWith('~')) return path;
   if (kIsWeb) return path;
   try {
     final env = Platform.environment;
-    final home = env['HOME'] ?? env['USERPROFILE'] ?? '';
+    final String home;
+    if (!kIsWeb && Platform.isMacOS) {
+      home = LocalFiles.macRealHome() ?? env['HOME'] ?? '';
+    } else {
+      home = env['HOME'] ?? env['USERPROFILE'] ?? '';
+    }
     final rest = path.substring(1).replaceAll('/', Platform.pathSeparator);
     return '$home$rest';
   } catch (_) {

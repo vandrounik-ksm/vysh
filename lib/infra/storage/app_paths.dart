@@ -40,9 +40,54 @@ class AppPaths {
       final dir = Directory(path);
       await dir.create(recursive: true);
       _configDir = dir;
+      await _migrateMacLegacy(dir);
     } catch (e) {
       initError = (path: path ?? '?', error: '$e');
     }
+  }
+
+  /// macOS: ранее (до App Sandbox) профиль жил в `~/.config/vysh`. При
+  /// первом запуске новых версий переносим hosts/settings/known_hosts,
+  /// если они там остались. Файлы копируются, а не переносятся: старые
+  /// оставляем как резервную копию.
+  static Future<void> _migrateMacLegacy(Directory target) async {
+    if (kIsWeb || !Platform.isMacOS) return;
+    try {
+      final legacy = Directory(_join(_realMacHome(), '.config/vysh'));
+      if (!await legacy.exists()) return;
+      var copied = false;
+      for (final name in const ['hosts.json', 'settings.json', 'known_hosts.json']) {
+        final src = File(_join(legacy.path, name));
+        final dst = File(_join(target.path, name));
+        if (await src.exists() && !await dst.exists()) {
+          await src.copy(dst.path);
+          copied = true;
+        }
+      }
+      if (copied) {
+        // Пароли из старого fallback-файла порта тоже переносим в новый.
+        final old = File(_join(legacy.parent.path, '.vysh_secrets.json'));
+        if (await old.exists()) {
+          final support = await getApplicationSupportDirectory();
+          final newFile = File(_join(support.path, '.vysh_secrets.json'));
+          if (!await newFile.exists()) await old.copy(newFile.path);
+        }
+      }
+    } catch (_) {
+      // Миграция не критична: профиль просто начнётся с нуля.
+    }
+  }
+
+  /// Домашний каталог пользователя вне контейнера App Sandbox.
+  /// HOME под sandbox указывает на контейнер; настоящий дом -
+  /// `/Users/<USER>`. Чтение из него разрешено sandbox.
+  static String _realMacHome() {
+    final env = Platform.environment;
+    final user = env['USER'] ?? env['LOGNAME'] ?? '';
+    if (user.isNotEmpty) return '/Users/$user';
+    final home = env['HOME'] ?? '.';
+    final i = home.indexOf('/Library/Containers/');
+    return i > 0 ? home.substring(0, i) : home;
   }
 
   static File file(String name) => File(_join(configDir.path, name));

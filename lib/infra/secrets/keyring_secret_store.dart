@@ -15,6 +15,10 @@ class KeyringSecretStore implements SecretStore {
         ? const FlutterSecureStorage(
             mOptions: MacOsOptions(
               accessibility: KeychainAccessibility.first_unlock,
+              // Классический (не data-protection) Keychain: не требует
+              // keychain-access-groups и provisioning-профиля - приложение
+              // без App Group, сборка без аккаунта Apple Developer.
+              usesDataProtectionKeychain: false,
             ),
           )
         : const FlutterSecureStorage();
