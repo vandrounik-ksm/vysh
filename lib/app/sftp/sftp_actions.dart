@@ -124,8 +124,22 @@ class SftpActions {
   /// Возвращает локальный путь первого элемента (для «показать в папке»).
   Future<String?> download(List<RemoteEntry> entries, {String? targetDir}) async {
     final sftp = await _sftp;
-    final dir = targetDir ?? downloadsDir;
-    await Directory(dir).create(recursive: true);
+    var dir = targetDir ?? downloadsDir;
+    // Целевая папка может быть недоступна (удалена, диск отвалился, путь
+    // из настроек остался от другой машины). На macOS скачиваем в системную
+    // «Загрузки» - она доступна по entitlement всегда; прочее оставляем
+    // как есть: ошибка записи всплывёт от передачи.
+    try {
+      await Directory(dir).create(recursive: true);
+    } catch (_) {
+      final fallback = LocalFiles.defaultDownloadsDir();
+      if (fallback != dir) {
+        await Directory(fallback).create(recursive: true);
+        dir = fallback;
+      } else {
+        rethrow;
+      }
+    }
     String? first;
     for (final e in entries) {
       final local = LocalFiles.uniquePath(dir, e.name);
