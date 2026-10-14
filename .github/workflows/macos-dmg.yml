@@ -1,0 +1,88 @@
+name: macOS DMG
+
+# Сборка и проверка DMG на GitHub Actions - без тега и релиза:
+# вручную (workflow_dispatch) и на изменения macOS-кода в PR/push.
+# Результат - артефакт vysh-<версия>-macos.dmg, скачивается со страницы запуска.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, macos-support]
+    paths:
+      - 'macos/**'
+      - 'lib/**'
+      - 'assets/**'
+      - 'tools/build_dmg.sh'
+      - 'pubspec.yaml'
+      - 'third_party/**'
+      - '.github/workflows/macos-dmg.yml'
+  pull_request:
+    paths:
+      - 'macos/**'
+      - 'lib/**'
+      - 'assets/**'
+      - 'tools/build_dmg.sh'
+      - 'pubspec.yaml'
+      - 'third_party/**'
+      - '.github/workflows/macos-dmg.yml'
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.6
+          cache: true
+
+      - name: Зависимости и анализ
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos
+
+      - name: Тесты
+        run: flutter test
+
+      - name: Сборка приложения и DMG
+        # Этап оформления окна через Finder AppleScript пропускается:
+        # на CI нет активной GUI-сессии пользователя - окно не сохранится.
+        # Скрипт сам откатывается к чистому hdiutil, если osascript не справился.
+        run: |
+          BUILD_DATE=$(date -u '+%d.%m.%y %H:%M:%S')
+          flutter build macos --release --dart-define="BUILD_DATE=$BUILD_DATE"
+          STAGING=build/dmg_ci_staging
+          rm -rf $STAGING && mkdir -p $STAGING
+          cp -R build/macos/Build/Products/Release/vysh.app $STAGING/
+          ln -s /Applications $STAGING/Applications
+          hdiutil create -volname "vysh" -srcfolder $STAGING \
+            -ov -format UDZO -quiet "vysh-macos-ci.dmg"
+
+      - name: Проверка DMG
+        run: |
+          hdiutil verify vysh-macos-ci.dmg
+          MOUNT=$(mktemp -d)
+          hdiutil attach vysh-macos-ci.dmg -mountpoint "$MOUNT" -quiet -nobrowse
+          ls "$MOUNT"
+          test -d "$MOUNT/vysh.app" || { echo "::error::vysh.app нет в образе"; exit 1; }
+          test -d "$MOUNT/Applications" || { echo "::error::ссылки на Программы нет"; exit 1; }
+          # Entitlements в подписанном приложении: sandbox + сеть + загрузки.
+          codesign -d --entitlements - "$MOUNT/vysh.app" 2>/dev/null | grep -q "app-sandbox" \
+            || { echo "::error::App Sandbox не включён"; exit 1; }
+          codesign --verify --deep "$MOUNT/vysh.app" || { echo "::error::подпись недействительна"; exit 1; }
+          # Приложение стартует: запускаем в фоне, ждём, проверяем, убиваем
+          # (раннер macos-latest даёт GUI-сессию; timeout из coreutils на macOS нет).
+          "$MOUNT/vysh.app/Contents/MacOS/vysh" & APP=$!
+          sleep 20
+          kill -0 $APP 2>/dev/null && echo "приложение живо после 20с" \
+            || { echo "::error::приложение упало при запуске"; exit 1; }
+          kill $APP 2>/dev/null || true
+          hdiutil detach "$MOUNT" -quiet || true
+
+      - name: Артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: vysh-macos-dmg
+          path: vysh-macos-ci.dmg
+          retention-days: 14
