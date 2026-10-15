@@ -38,10 +38,12 @@ class DesktopEnv {
   }
 
   /// Окружения, где свой заголовок с вкладками выглядит уместно.
+  /// На macOS вкладки рисуем в своей полосе, а нативный светофор остаётся
+  /// слева поверх неё (окно без заголовка, transparent titlebar).
   static bool get supportsCustomTitleBar {
     if (kIsWeb) return false;
     try {
-      if (Platform.isWindows) return true;
+      if (Platform.isWindows || Platform.isMacOS) return true;
       if (!Platform.isLinux || isTiling) return false;
       final d = _desktop;
       return d.contains('gnome') || d.contains('kde') || d.contains('plasma');
@@ -69,6 +71,16 @@ class DesktopEnv {
     }
     try {
       return Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Текущая платформа - macOS (нативный светофор, ⌘-шорткаты, свои пути).
+  static bool get isMac {
+    if (kIsWeb) return defaultTargetPlatform == TargetPlatform.macOS;
+    try {
+      return Platform.isMacOS;
     } catch (_) {
       return false;
     }

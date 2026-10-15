@@ -8,12 +8,13 @@ mixin _DesktopMenu on _SessionViewBase {
       context,
       ref.read(settingsProvider).language,
     ).isRussian;
+    final mac = PlatformCapabilities.isMacOS;
     final hasSelection = _controller.selection != null;
     _menu.currentState?.open(globalPosition, [
       menuItem(
         ru ? 'Копировать' : 'Copy',
         icon: Icons.content_copy,
-        shortcut: Keys.copy,
+        shortcut: mac ? Keys.macCopy : Keys.copy,
         onPressed: hasSelection
             ? () {
                 _copySelection();
@@ -24,14 +25,14 @@ mixin _DesktopMenu on _SessionViewBase {
       menuItem(
         ru ? 'Вставить' : 'Paste',
         icon: Icons.content_paste,
-        shortcut: Keys.paste,
+        shortcut: mac ? Keys.macPaste : Keys.paste,
         onPressed: _paste,
       ),
       menuDivider(),
       menuItem(
         ru ? 'Файлы (SFTP)' : 'Files (SFTP)',
         icon: Icons.folder_outlined,
-        shortcut: Keys.files,
+        shortcut: mac ? Keys.macFiles : Keys.files,
         onPressed: () => ref.read(sftpPaneProvider.notifier).toggle(widget.tab.id),
       ),
       menuItem(
@@ -42,7 +43,7 @@ mixin _DesktopMenu on _SessionViewBase {
       menuItem(
         ru ? 'Переподключить' : 'Reconnect',
         icon: Icons.refresh,
-        shortcut: Keys.reconnect,
+        shortcut: mac ? Keys.macReconnect : Keys.reconnect,
         onPressed: _reconnect,
       ),
     ]);
@@ -83,6 +84,10 @@ mixin _DesktopMenu on _SessionViewBase {
           const _PasteIntent(),
       if (ref.read(settingsProvider).ctrlVPaste)
         const SingleActivator(LogicalKeyboardKey.keyV, control: true):
+            const _PasteIntent(),
+      // macOS: привычная вставка через ⌘V.
+      if (PlatformCapabilities.isMacOS)
+        const SingleActivator(LogicalKeyboardKey.keyV, meta: true):
             const _PasteIntent(),
     };
   }

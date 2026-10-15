@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="135%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.32"/>
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.18"/>
+    </filter>
+    <linearGradient id="yellowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFF482"/>
+      <stop offset="100%" stop-color="#FCD655"/>
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF8A1E"/>
+      <stop offset="100%" stop-color="#F75E00"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#16654A"/>
+      <stop offset="100%" stop-color="#0D4431"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="url(#yellowGrad)" filter="url(#shadow)"/>
+  <rect x="101" y="101" width="822" height="822" rx="184" ry="184" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-opacity="0.35"/>
+  <circle cx="270" cy="512" r="58" fill="#0A0A0A"/>
+  <polyline points="420,400 560,512 420,624" fill="none" stroke="url(#orangeGrad)" stroke-width="96" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="630" y1="624" x2="820" y2="624" stroke="url(#greenGrad)" stroke-width="76" stroke-linecap="round"/>
+</svg>

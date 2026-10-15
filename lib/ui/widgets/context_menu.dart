@@ -121,4 +121,12 @@ class Keys {
   static const delete = SingleActivator(LogicalKeyboardKey.delete);
   static const rename = SingleActivator(LogicalKeyboardKey.f2);
   static const refresh = SingleActivator(LogicalKeyboardKey.f5);
+
+  // macOS: те же действия через ⌘ - для подписей в меню.
+  static const macCopy = SingleActivator(LogicalKeyboardKey.keyC, meta: true);
+  static const macPaste = SingleActivator(LogicalKeyboardKey.keyV, meta: true);
+  static const macFiles = SingleActivator(LogicalKeyboardKey.keyE, meta: true);
+  static const macReconnect = SingleActivator(LogicalKeyboardKey.keyR, meta: true);
+  static const macCloseTab = SingleActivator(LogicalKeyboardKey.keyW, meta: true);
+  static const macNewHost = SingleActivator(LogicalKeyboardKey.keyN, meta: true);
 }

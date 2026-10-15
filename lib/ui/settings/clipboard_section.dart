@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/settings/app_settings.dart';
 import '../../l10n/app_strings.dart';
 import '../../app/controllers/settings_controller.dart';
+import '../../infra/platform/capabilities.dart';
 import '../../infra/platform/desktop_env.dart';
 import 'setting_row.dart';
 
@@ -18,6 +19,8 @@ class ClipboardSection extends ConsumerWidget {
     final ru = AppStrings.of(context, s.language).isRu;
     final linux = s.copyOnSelect;
     final rmbPaste = s.rightClick != RightClickAction.menu;
+    // macOS: подписи клавиш под местные привычки (⌘ вместо Ctrl+Shift).
+    final mac = PlatformCapabilities.isMacOS;
 
     final confirm = SwitchListTile(
       contentPadding: EdgeInsets.zero,
@@ -40,7 +43,7 @@ class ClipboardSection extends ConsumerWidget {
       _StyleCard(
         selected: linux,
         icon: Icons.mouse_outlined,
-        title: ru ? 'Как в Linux' : 'Linux style',
+        title: ru ? (mac ? 'Выделением' : 'Как в Linux') : (mac ? 'Selection' : 'Linux style'),
         copyKeys: [ru ? 'Выделение' : 'Selection'],
         pasteKeys: [ru ? 'Средняя кнопка' : 'Middle click', if (linux && rmbPaste) ru ? 'ПКМ' : 'RMB'],
         rmbLabel: ru ? 'ПКМ тоже вставляет' : 'Right click pastes too',
@@ -53,9 +56,15 @@ class ClipboardSection extends ConsumerWidget {
       _StyleCard(
         selected: !linux,
         icon: Icons.keyboard_outlined,
-        title: ru ? 'Клавишами' : 'Keyboard',
-        copyKeys: ['Ctrl', 'Shift', 'C', if (!linux && rmbPaste) ru ? 'ПКМ' : 'RMB'],
-        pasteKeys: ['Ctrl', 'Shift', 'V', if (!linux && rmbPaste) ru ? 'ПКМ' : 'RMB'],
+        title: ru ? (mac ? 'Как в Mac' : 'Клавишами') : (mac ? 'Mac style' : 'Keyboard'),
+        copyKeys: [
+          if (mac) ...['⌘', 'C'] else ...['Ctrl', 'Shift', 'C'],
+          if (!linux && rmbPaste) ru ? 'ПКМ' : 'RMB',
+        ],
+        pasteKeys: [
+          if (mac) ...['⌘', 'V'] else ...['Ctrl', 'Shift', 'V'],
+          if (!linux && rmbPaste) ru ? 'ПКМ' : 'RMB',
+        ],
         rmbLabel: ru ? 'ПКМ копирует и вставляет' : 'Right click copies and pastes',
         rmbValue: !linux && rmbPaste,
         onRmb: (v) => setRmb(false, v),
@@ -90,7 +99,9 @@ class ClipboardSection extends ConsumerWidget {
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: Text(ru ? 'Ctrl+V тоже вставляет' : 'Ctrl+V pastes too'),
+          title: Text(mac
+              ? (ru ? '⌘V тоже вставляет' : '⌘V pastes too')
+              : (ru ? 'Ctrl+V тоже вставляет' : 'Ctrl+V pastes too')),
           value: s.ctrlVPaste,
           onChanged: ctrl.setCtrlVPaste,
         ),

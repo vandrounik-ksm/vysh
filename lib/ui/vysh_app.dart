@@ -36,9 +36,10 @@ class VyshApp extends ConsumerWidget {
     // Переключили режим заголовка - применяем сразу, без перезапуска.
     ref.listen<bool>(customTitleBarProvider, (_, custom) {
       if (PlatformCapabilities.desktopWindow) {
+        // macOS: светофор остаётся всегда, прячем только полосу заголовка.
         windowManager.setTitleBarStyle(
           custom ? TitleBarStyle.hidden : TitleBarStyle.normal,
-          windowButtonVisibility: !custom,
+          windowButtonVisibility: PlatformCapabilities.isMacOS || !custom,
         );
       }
     });

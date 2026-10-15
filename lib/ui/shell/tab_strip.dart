@@ -8,6 +8,7 @@ import '../../l10n/app_strings.dart';
 import '../../domain/models/session_tab.dart';
 import '../../app/controllers/settings_controller.dart';
 import '../../app/controllers/tabs_controller.dart';
+import '../../infra/platform/capabilities.dart';
 import '../../infra/platform/desktop_env.dart';
 import '../widgets/context_menu.dart';
 import 'ui_state.dart';
@@ -81,16 +82,25 @@ class TabStrip extends ConsumerWidget {
       ),
     );
 
+    // macOS: светофор слева поверх полосы - отступаем от него, свои
+    // кнопки окна не показываем (см. WindowButtons).
+    final mac = PlatformCapabilities.isMacOS;
+
     return Container(
       height: 46,
       color: scheme.surfaceContainer,
-      padding: EdgeInsets.only(left: 6, right: custom ? 0 : 6),
+      padding: EdgeInsets.only(left: mac ? 0 : 6, right: custom && !mac ? 0 : 6),
       child: Row(
         children: [
+          if (mac) ...[
+            // Место под нативный светофор: окно открыто без заголовка
+            // (fullSizeContentView), и полоса вкладков заходит под него.
+            const SizedBox(width: 80),
+          ],
           Expanded(
             // Свой заголовок: пустое место справа от вкладок таскает окно,
             // двойной клик - развернуть/восстановить.
-            child: custom
+            child: custom || mac
                 ? Stack(
                     children: [
                       const Positioned.fill(child: DragToMoveArea(child: SizedBox.expand())),
@@ -99,7 +109,7 @@ class TabStrip extends ConsumerWidget {
                   )
                 : Align(alignment: Alignment.centerLeft, child: tabs),
           ),
-          if (custom) ...[
+          if (custom && !mac) ...[
             const SizedBox(width: 6),
             const WindowButtons(),
           ],

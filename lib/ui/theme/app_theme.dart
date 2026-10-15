@@ -134,6 +134,9 @@ const monoFontFallback = <String>[
   'Consolas',
   'DejaVu Sans Mono',
   'Liberation Mono',
+  // macOS: своих моношрифтов нет (Menlo/SF Mono), пока не вшит свой Nerd Font.
+  'Menlo',
+  'Courier New',
   'monospace',
 ];
 

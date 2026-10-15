@@ -323,15 +323,16 @@ class SettingsPage extends ConsumerWidget {
                         label: Text(strings.thirdPartyLicenses),
                         // Тексты лицензий всех пакетов Flutter собирает в сборку сам
                         // (NOTICES); палитра Catppuccin добавлена в main.dart.
-                        onPressed: () => showLicensePage(
-                          context: context,
-                          applicationName: 'vysh',
-                          applicationVersion: appVersion,
-                          applicationLegalese: 'GNU GPL v3 or later (GPL-3.0-or-later)\n'
-                              '© vyto4ka and contributors',
-                          applicationIcon: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Image.asset('assets/icon/vysh_256.png', width: 48, height: 48),
+                        //
+                        // macOS: окно без системного заголовка (вкладки под
+                        // светофором), а у LicensePage своя панель с кнопкой
+                        // «назад» на самом верху - без отступа она попадает
+                        // под светофор. Отступ сверху на высоту полосы вкладок.
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (context) => _MacSafeLicensePage(
+                              applicationVersion: appVersion,
+                            ),
                           ),
                         ),
                       ),
@@ -424,6 +425,35 @@ class _MemoryUsageState extends State<_MemoryUsage> {
           onPressed: () => setState(() {}),
         ),
       ],
+    );
+  }
+}
+
+/// [LicensePage] с отступом сверху на macOS: окно vysh без системного
+/// заголовка, полоса вкладок уходит под нативный светофор, а у LicensePage
+/// своя панель с back-стрелкой на y=0 - без отступа она залезает под
+/// светофор (штатный showLicensePage отступа задать не позволяет).
+class _MacSafeLicensePage extends StatelessWidget {
+  const _MacSafeLicensePage({required this.applicationVersion});
+
+  final String applicationVersion;
+
+  @override
+  Widget build(BuildContext context) {
+    final page = LicensePage(
+      applicationName: 'vysh',
+      applicationVersion: applicationVersion,
+      applicationLegalese: 'GNU GPL v3 or later (GPL-3.0-or-later)\n'
+          '© vyto4ka and contributors',
+      applicationIcon: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Image.asset('assets/icon/vysh_256.png', width: 48, height: 48),
+      ),
+    );
+    if (!PlatformCapabilities.isMacOS) return page;
+    return Padding(
+      padding: const EdgeInsets.only(top: 46),
+      child: page,
     );
   }
 }

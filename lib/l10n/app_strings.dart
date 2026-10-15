@@ -1,4 +1,4 @@
-import 'dart:io' show FileSystemException;
+import 'dart:io' show FileSystemException, Platform;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -67,8 +67,12 @@ class AppStrings {
   String get home => isRu ? 'Главная' : 'Home';
   String get homeTooltip => isRu ? 'Главная (Alt+1)' : 'Home (Alt+1)';
   String get newTabTooltip => isRu ? 'Новая вкладка' : 'New tab';
-  String get newTabDesktopTooltip =>
-      isRu ? 'Новая вкладка (Ctrl+Shift+T)' : 'New tab (Ctrl+Shift+T)';
+  String get newTabDesktopTooltip {
+    final mac = Platform.isMacOS;
+    return isRu
+        ? 'Новая вкладка (${mac ? '⌘T' : 'Ctrl+Shift+T'})'
+        : 'New tab (${mac ? '⌘T' : 'Ctrl+Shift+T'})';
+  }
   String get settingsTooltip => isRu ? 'Настройки' : 'Settings';
   String get settingsDesktopTooltip =>
       isRu ? 'Настройки (Ctrl+,)' : 'Settings (Ctrl+,)';
@@ -188,9 +192,12 @@ class AppStrings {
   String get copyOnSelectMobileDesc => isRu
       ? 'Автоматически копировать выделенный текст в буфер'
       : 'Automatically copy highlighted text to clipboard';
-  String get copyOnSelectDesktopDesc => isRu
-      ? 'Как в терминалах Linux. Вставка - Ctrl+Shift+V'
-      : 'Linux terminal style. Paste with Ctrl+Shift+V';
+  String get copyOnSelectDesktopDesc {
+    final mac = Platform.isMacOS;
+    return isRu
+        ? (mac ? 'Как в терминалах. Вставка - ⌘V' : 'Как в терминалах Linux. Вставка - Ctrl+Shift+V')
+        : (mac ? 'Terminal style. Paste with ⌘V' : 'Linux terminal style. Paste with Ctrl+Shift+V');
+  }
   String get accessoryBarTitle => isRu
       ? 'Панель горячих клавиш (Ctrl, Esc, стрелки)'
       : 'Terminal accessory bar (Ctrl, Esc, arrows)';
@@ -245,8 +252,10 @@ class AppStrings {
   String get statusClosed => isRu ? 'Сессия завершена' : 'Session closed';
   String get files => isRu ? 'Файлы' : 'Files';
   String get console => isRu ? 'Консоль' : 'Console';
-  String get filesShortcut =>
-      isRu ? 'Файлы  Ctrl+Shift+E' : 'Files  Ctrl+Shift+E';
+  String get filesShortcut {
+    final mac = Platform.isMacOS;
+    return isRu ? 'Файлы  ${mac ? '⌘E' : 'Ctrl+Shift+E'}' : 'Files  ${mac ? '⌘E' : 'Ctrl+Shift+E'}';
+  }
   String get reconnectShort => isRu ? 'Переподкл.' : 'Reconnect';
   String get sftpPaneTitle => isRu ? 'Файлы (SFTP)' : 'Files (SFTP)';
 

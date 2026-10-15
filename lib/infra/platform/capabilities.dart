@@ -6,8 +6,8 @@ import 'package:flutter/foundation.dart';
 /// Код спрашивает о возможности, а не об ОС: так видно, зачем проверка,
 /// и новую платформу достаточно описать здесь.
 ///
-/// Поставляемые цели - Windows, Linux и Android; web и Apple-платформы
-/// в проверках встречаются, но готовой поддержкой не считаются.
+/// Поставляемые цели - Windows, Linux, Android и macOS; web и остальные
+/// Apple-платформы в проверках встречаются, но готовой поддержкой не считаются.
 abstract final class PlatformCapabilities {
   static bool _is(bool Function() check) {
     if (kIsWeb) return false;
@@ -19,7 +19,11 @@ abstract final class PlatformCapabilities {
   }
 
   /// Своё окно с управлением через window_manager (размер, заголовок).
-  static bool get desktopWindow => _is(() => Platform.isWindows || Platform.isLinux);
+  static bool get desktopWindow => _is(
+      () => Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+
+  /// Текущая ОС - macOS (нативный светофор, ⌘-шорткаты, свои пути).
+  static bool get isMacOS => _is(() => Platform.isMacOS);
 
   /// Края окна без системной рамки тянем сами (Linux; на Windows это делает система).
   static bool get selfResizedWindow => _is(() => Platform.isLinux);

@@ -89,6 +89,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   Map<ShortcutActivator, VoidCallback> _buildBindings() {
     final ctrl = ref.read(tabsProvider.notifier);
+    final mac = PlatformCapabilities.isMacOS;
     return {
       // Новая вкладка → главная + фокус в поиск (быстрое подключение).
       const SingleActivator(LogicalKeyboardKey.keyT, control: true, shift: true): () {
@@ -114,6 +115,31 @@ class _AppShellState extends ConsumerState<AppShell> {
       const SingleActivator(LogicalKeyboardKey.keyE, control: true, shift: true): () {
         final tab = ref.read(tabsProvider).activeTab;
         if (tab != null) ref.read(sftpPaneProvider.notifier).toggle(tab.id);
+      },
+      // macOS: те же действия привычными ⌘-шорткатами.
+      if (mac) ...{
+        const SingleActivator(LogicalKeyboardKey.keyT, meta: true): () {
+          _goHome(0);
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => ref.read(hostSearchFocusProvider).requestFocus(),
+          );
+        },
+        const SingleActivator(LogicalKeyboardKey.keyW, meta: true): ctrl.closeActive,
+        const SingleActivator(LogicalKeyboardKey.keyR, meta: true): () {
+          final tab = ref.read(tabsProvider).activeTab;
+          if (tab != null) ctrl.reconnect(tab.id);
+        },
+        const SingleActivator(LogicalKeyboardKey.keyN, meta: true): () {
+          _goHome(0);
+          showHostEditor(context);
+        },
+        const SingleActivator(LogicalKeyboardKey.comma, meta: true): () => _goHome(1),
+        const SingleActivator(LogicalKeyboardKey.keyE, meta: true): () {
+          final tab = ref.read(tabsProvider).activeTab;
+          if (tab != null) ref.read(sftpPaneProvider.notifier).toggle(tab.id);
+        },
+        for (var i = 1; i <= 9; i++)
+          SingleActivator(_digitKeys[i - 1], meta: true): () => ctrl.activate(i - 1),
       },
       for (var i = 1; i <= 9; i++)
         SingleActivator(_digitKeys[i - 1], alt: true): () => ctrl.activate(i - 1),
@@ -152,8 +178,11 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     // Linux без системной рамки: края окна тянем сами.
     final resizable = PlatformCapabilities.selfResizedWindow && ref.watch(customTitleBarProvider);
+    // macOS: окно без заголовка (fullSizeContentView), полоса вкладок сама
+    // отступает под светофор - SafeArea сверху не нужен.
     return Scaffold(
       body: SafeArea(
+        top: !PlatformCapabilities.isMacOS,
         child: resizable ? DragToResizeArea(resizeEdgeSize: 6, child: body) : body,
       ),
     );
