@@ -76,16 +76,6 @@ class DesktopEnv {
     }
   }
 
-  /// Текущая платформа - macOS (нативный светофор, ⌘-шорткаты, свои пути).
-  static bool get isMac {
-    if (kIsWeb) return defaultTargetPlatform == TargetPlatform.macOS;
-    try {
-      return Platform.isMacOS;
-    } catch (_) {
-      return false;
-    }
-  }
-
   /// Является ли устройство мобильным (Android/iOS).
   static bool get isMobile {
     if (kIsWeb) {

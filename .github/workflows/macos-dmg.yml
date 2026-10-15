@@ -1,18 +1,21 @@
 name: macOS DMG
 
 # Сборка и проверка DMG на GitHub Actions - без тега и релиза:
-# вручную (workflow_dispatch) и на изменения macOS-кода в PR/push.
-# Результат - артефакт vysh-<версия>-macos.dmg, скачивается со страницы запуска.
+# вручную (workflow_dispatch) и на изменения кода в PR/push.
+# Релиз ждёт и macOS-сборку, поэтому ломать её лучше узнать здесь, а не на теге.
+# Анализ и тесты - в ci.yml, здесь только сборка и запуск.
+# Результат - артефакт vysh-macos-ci.dmg, скачивается со страницы запуска.
 on:
   workflow_dispatch:
   push:
-    branches: [main, macos-support]
+    branches: [main]
     paths:
       - 'macos/**'
       - 'lib/**'
       - 'assets/**'
       - 'tools/build_dmg.sh'
       - 'pubspec.yaml'
+      - 'pubspec.lock'
       - 'third_party/**'
       - '.github/workflows/macos-dmg.yml'
   pull_request:
@@ -22,6 +25,7 @@ on:
       - 'assets/**'
       - 'tools/build_dmg.sh'
       - 'pubspec.yaml'
+      - 'pubspec.lock'
       - 'third_party/**'
       - '.github/workflows/macos-dmg.yml'
 
@@ -37,18 +41,11 @@ jobs:
           flutter-version: 3.47.6
           cache: true
 
-      - name: Зависимости и анализ
-        run: |
-          flutter pub get
-          flutter analyze --no-fatal-infos
-
-      - name: Тесты
-        run: flutter test
+      - run: flutter pub get
 
       - name: Сборка приложения и DMG
-        # Этап оформления окна через Finder AppleScript пропускается:
-        # на CI нет активной GUI-сессии пользователя - окно не сохранится.
-        # Скрипт сам откатывается к чистому hdiutil, если osascript не справился.
+        # Не tools/build_dmg.sh: оформление окна через Finder AppleScript
+        # на CI не сохранится (нет сессии пользователя) - чистый hdiutil.
         run: |
           BUILD_DATE=$(date -u '+%d.%m.%y %H:%M:%S')
           flutter build macos --release --dart-define="BUILD_DATE=$BUILD_DATE"
@@ -67,10 +64,15 @@ jobs:
           ls "$MOUNT"
           test -d "$MOUNT/vysh.app" || { echo "::error::vysh.app нет в образе"; exit 1; }
           test -d "$MOUNT/Applications" || { echo "::error::ссылки на Программы нет"; exit 1; }
-          # Entitlements в подписанном приложении: sandbox + сеть + загрузки.
-          codesign -d --entitlements - "$MOUNT/vysh.app" 2>/dev/null | grep -q "app-sandbox" \
-            || { echo "::error::App Sandbox не включён"; exit 1; }
-          codesign --verify --deep "$MOUNT/vysh.app" || { echo "::error::подпись недействительна"; exit 1; }
+          # Без App Sandbox: SSH-клиенту нужен ~/.ssh (ключи по пути из хоста).
+          codesign -d --entitlements - --xml "$MOUNT/vysh.app" 2>/dev/null \
+            | plutil -extract com.apple.security.app-sandbox raw -o - - 2>/dev/null \
+            | grep -q true && { echo "::error::App Sandbox включён - ~/.ssh будет недоступен"; exit 1; }
+          codesign --verify --deep --strict "$MOUNT/vysh.app" || { echo "::error::подпись недействительна"; exit 1; }
+          # Универсальная сборка: и Apple Silicon, и Intel.
+          ARCHS=$(lipo -archs "$MOUNT/vysh.app/Contents/MacOS/vysh")
+          echo "архитектуры: $ARCHS"
+          case "$ARCHS" in *arm64*x86_64*|*x86_64*arm64*) ;; *) echo "::error::не universal: $ARCHS"; exit 1 ;; esac
           # Приложение стартует: запускаем в фоне, ждём, проверяем, убиваем
           # (раннер macos-latest даёт GUI-сессию; timeout из coreutils на macOS нет).
           "$MOUNT/vysh.app/Contents/MacOS/vysh" & APP=$!

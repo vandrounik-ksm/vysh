@@ -127,6 +127,4 @@ class Keys {
   static const macPaste = SingleActivator(LogicalKeyboardKey.keyV, meta: true);
   static const macFiles = SingleActivator(LogicalKeyboardKey.keyE, meta: true);
   static const macReconnect = SingleActivator(LogicalKeyboardKey.keyR, meta: true);
-  static const macCloseTab = SingleActivator(LogicalKeyboardKey.keyW, meta: true);
-  static const macNewHost = SingleActivator(LogicalKeyboardKey.keyN, meta: true);
 }

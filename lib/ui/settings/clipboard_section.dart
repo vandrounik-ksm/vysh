@@ -99,9 +99,8 @@ class ClipboardSection extends ConsumerWidget {
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: Text(mac
-              ? (ru ? '⌘V тоже вставляет' : '⌘V pastes too')
-              : (ru ? 'Ctrl+V тоже вставляет' : 'Ctrl+V pastes too')),
+          // Переключатель только про Ctrl+V: ⌘V на macOS вставляет всегда.
+          title: Text(ru ? 'Ctrl+V тоже вставляет' : 'Ctrl+V pastes too'),
           value: s.ctrlVPaste,
           onChanged: ctrl.setCtrlVPaste,
         ),

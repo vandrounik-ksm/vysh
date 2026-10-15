@@ -1,6 +1,7 @@
 import 'dart:io' show FileSystemException, Platform;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../app/settings/app_settings.dart';
@@ -12,6 +13,9 @@ part 'connection_strings.dart';
 part 'hosts_strings.dart';
 part 'sftp_strings.dart';
 part 'terminal_strings.dart';
+
+/// macOS: в подписях сочетаний ⌘ вместо Ctrl+Shift.
+bool get _isMac => !kIsWeb && Platform.isMacOS;
 
 /// Централизованная локализация приложения (русский и английский языки).
 /// Строки по разделам - в частях этой библиотеки (`part`), все доступны
@@ -65,17 +69,22 @@ class AppStrings {
 
   // Навигация и полоса вкладок
   String get home => isRu ? 'Главная' : 'Home';
-  String get homeTooltip => isRu ? 'Главная (Alt+1)' : 'Home (Alt+1)';
+  String get homeTooltip {
+    final keys = _isMac ? '⌘1' : 'Alt+1';
+    return isRu ? 'Главная ($keys)' : 'Home ($keys)';
+  }
   String get newTabTooltip => isRu ? 'Новая вкладка' : 'New tab';
   String get newTabDesktopTooltip {
-    final mac = Platform.isMacOS;
+    final mac = _isMac;
     return isRu
         ? 'Новая вкладка (${mac ? '⌘T' : 'Ctrl+Shift+T'})'
         : 'New tab (${mac ? '⌘T' : 'Ctrl+Shift+T'})';
   }
   String get settingsTooltip => isRu ? 'Настройки' : 'Settings';
-  String get settingsDesktopTooltip =>
-      isRu ? 'Настройки (Ctrl+,)' : 'Settings (Ctrl+,)';
+  String get settingsDesktopTooltip {
+    final keys = _isMac ? '⌘,' : 'Ctrl+,';
+    return isRu ? 'Настройки ($keys)' : 'Settings ($keys)';
+  }
   String get closeTab => isRu ? 'Закрыть вкладку' : 'Close tab';
   String get hosts => isRu ? 'Хосты' : 'Hosts';
   String get settings => isRu ? 'Настройки' : 'Settings';
@@ -193,7 +202,7 @@ class AppStrings {
       ? 'Автоматически копировать выделенный текст в буфер'
       : 'Automatically copy highlighted text to clipboard';
   String get copyOnSelectDesktopDesc {
-    final mac = Platform.isMacOS;
+    final mac = _isMac;
     return isRu
         ? (mac ? 'Как в терминалах. Вставка - ⌘V' : 'Как в терминалах Linux. Вставка - Ctrl+Shift+V')
         : (mac ? 'Terminal style. Paste with ⌘V' : 'Linux terminal style. Paste with Ctrl+Shift+V');
@@ -253,7 +262,7 @@ class AppStrings {
   String get files => isRu ? 'Файлы' : 'Files';
   String get console => isRu ? 'Консоль' : 'Console';
   String get filesShortcut {
-    final mac = Platform.isMacOS;
+    final mac = _isMac;
     return isRu ? 'Файлы  ${mac ? '⌘E' : 'Ctrl+Shift+E'}' : 'Files  ${mac ? '⌘E' : 'Ctrl+Shift+E'}';
   }
   String get reconnectShort => isRu ? 'Переподкл.' : 'Reconnect';

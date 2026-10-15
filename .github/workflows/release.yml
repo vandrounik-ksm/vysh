@@ -1,6 +1,6 @@
 name: Release
 
-# Ставим тег vX.Y.Z → собираются Linux, Windows и Android → файлы прикрепляются к релизу.
+# Ставим тег vX.Y.Z → собираются Linux, Windows, macOS и Android → файлы прикрепляются к релизу.
 on:
   push:
     tags: ['v*']

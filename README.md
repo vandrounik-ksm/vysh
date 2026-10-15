@@ -115,19 +115,20 @@ tar -xzf vysh-<версия>-linux-x64.tar.gz -C ~/.local/opt/vysh
 1. Скачайте `vysh-<версия>-macos.dmg` со страницы [релизов](../../releases/latest).
 2. Откройте образ и перетащите vysh в папку «Программы».
 
-> Gatekeeper может предупредить о неизвестном разработчике (сборка не подписана сертификатом Apple).
-> ПКМ (⌘+клик) по vysh → «Открыть» → «Открыть» в диалоге.
+> Сборка не подписана сертификатом Apple и не нотаризована, поэтому первый запуск macOS заблокирует.
+> Откройте «Системные настройки → Конфиденциальность и безопасность» и нажмите «Всё равно открыть» рядом с сообщением о vysh.
+> На macOS 12-14 достаточно ПКМ (Control+клик) по vysh → «Открыть».
 
-Для хранения паролей используется Keychain.
+Пароли хранятся в Keychain. После обновления macOS может один раз спросить, разрешить ли новой версии доступ к ним: выберите «Разрешать всегда».
 
 ### Обновление
-Для Windows и архива Linux удалите папку с предыдущей версией и распакуйте новую. Хосты, настройки и пароли хранятся отдельно от программы и не затрагиваются.
+Для Windows и архива Linux удалите папку с предыдущей версией и распакуйте новую. На macOS перетащите новую vysh в «Программы» с заменой. Хосты, настройки и пароли хранятся отдельно от программы и не затрагиваются.
 
 ## Хранение данных
 
 | | Windows | Linux | macOS | Android |
 |---|---|---|---|---|
-| Хосты, настройки, `known_hosts.json` | `%APPDATA%\vysh` | `~/.config/vysh` | `~/Library/Application Support/vysh` (в контейнере App Sandbox) | внутреннее хранилище приложения |
+| Хосты, настройки, `known_hosts.json` | `%APPDATA%\vysh` | `~/.config/vysh` | `~/Library/Application Support/vysh` | внутреннее хранилище приложения |
 | Пароли и парольные фразы | DPAPI (привязаны к учётной записи) | Secret Service (gnome-keyring, KWallet, KeePassXC) | Keychain | Android Keystore |
 
 Файлы хостов и настроек представляют собой обычный JSON без секретов: их можно хранить в git или синхронизировать, например, через Syncthing. Переменная окружения `VYSH_CONFIG_DIR` позволяет запустить vysh с отдельной папкой профиля. При каждом сохранении прежняя версия остаётся рядом в `.bak`.
@@ -168,7 +169,7 @@ powershell -ExecutionPolicy Bypass -File tools\build-windows.ps1
 
 Для Linux дополнительно нужны пакеты `ninja-build libgtk-3-dev libsecret-1-dev`; сборка: `flutter build linux --release`.
 
-Для macOS нужен Xcode (command line tools достаточно для debug); релизная сборка с упаковкой в DMG:
+Для macOS нужен полный Xcode (Command Line Tools не хватит: в них нет `xcodebuild`); релизная сборка с упаковкой в DMG:
 ```sh
 ./tools/build_dmg.sh    # результат: build/vysh-<версия>-macos.dmg
 ```
@@ -183,7 +184,7 @@ flutter run -d <устройство>    # отладка
 Для проверки интерфейса и снятия скриншотов есть демо-стенд из пяти SSH-серверов в Docker: [tools/demo](tools/demo/README.md).
 
 ### Релизы
-Сборки выполняет GitHub Actions: по тегу `vX.Y.Z` в [Releases](../../releases) публикуются архив для Windows, архив для Linux, PKGBUILD и APK, а текст релиза берётся из [CHANGELOG.md](CHANGELOG.md). Порядок выпуска описан в [docs/RELEASING.md](docs/RELEASING.md).
+Сборки выполняет GitHub Actions: по тегу `vX.Y.Z` в [Releases](../../releases) публикуются архив для Windows, архив для Linux, PKGBUILD, DMG для macOS и APK, а текст релиза берётся из [CHANGELOG.md](CHANGELOG.md). Порядок выпуска описан в [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Технологии
 

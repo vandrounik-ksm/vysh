@@ -11,6 +11,7 @@ import '../../app/dependencies.dart';
 import '../../app/controllers/settings_controller.dart';
 import '../../app/controllers/tabs_controller.dart';
 import '../../app/terminal/session_auth.dart' show expandHome;
+import '../../infra/platform/capabilities.dart';
 import '../../infra/platform/desktop_env.dart';
 import '../theme/app_theme.dart';
 import '../widgets/strings_context.dart';
@@ -164,6 +165,11 @@ class _HostEditorSheetState extends ConsumerState<_HostEditorSheet> {
         const SingleActivator(LogicalKeyboardKey.enter, control: true): () => _save(),
         const SingleActivator(LogicalKeyboardKey.enter, control: true, shift: true): () =>
             _save(connect: true),
+        if (PlatformCapabilities.isMacOS) ...{
+          const SingleActivator(LogicalKeyboardKey.enter, meta: true): () => _save(),
+          const SingleActivator(LogicalKeyboardKey.enter, meta: true, shift: true): () =>
+              _save(connect: true),
+        },
         const SingleActivator(LogicalKeyboardKey.escape): () => Navigator.of(context).pop(),
       },
       child: Material(

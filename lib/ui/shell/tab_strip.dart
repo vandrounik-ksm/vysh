@@ -82,34 +82,36 @@ class TabStrip extends ConsumerWidget {
       ),
     );
 
-    // macOS: светофор слева поверх полосы - отступаем от него, свои
-    // кнопки окна не показываем (см. WindowButtons).
-    final mac = PlatformCapabilities.isMacOS;
+    // macOS со своим заголовком: нативный светофор рисуется слева поверх
+    // полосы - вкладки отступают от него, свои кнопки окна не нужны.
+    // С системным заголовком светофор в нём, полоса обычная.
+    final trafficLights = custom && PlatformCapabilities.isMacOS;
 
     return Container(
       height: 46,
       color: scheme.surfaceContainer,
-      padding: EdgeInsets.only(left: mac ? 0 : 6, right: custom && !mac ? 0 : 6),
+      padding: EdgeInsets.only(
+        left: trafficLights ? 0 : 6,
+        right: custom && !trafficLights ? 0 : 6,
+      ),
       child: Row(
         children: [
-          if (mac) ...[
-            // Место под нативный светофор: окно открыто без заголовка
-            // (fullSizeContentView), и полоса вкладков заходит под него.
-            const SizedBox(width: 80),
-          ],
           Expanded(
-            // Свой заголовок: пустое место справа от вкладок таскает окно,
+            // Свой заголовок: пустое место вокруг вкладок таскает окно,
             // двойной клик - развернуть/восстановить.
-            child: custom || mac
+            child: custom
                 ? Stack(
                     children: [
                       const Positioned.fill(child: DragToMoveArea(child: SizedBox.expand())),
-                      Align(alignment: Alignment.centerLeft, child: tabs),
+                      Padding(
+                        padding: EdgeInsets.only(left: trafficLights ? 80 : 0),
+                        child: Align(alignment: Alignment.centerLeft, child: tabs),
+                      ),
                     ],
                   )
                 : Align(alignment: Alignment.centerLeft, child: tabs),
           ),
-          if (custom && !mac) ...[
+          if (custom && !trafficLights) ...[
             const SizedBox(width: 6),
             const WindowButtons(),
           ],

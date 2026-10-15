@@ -3,7 +3,7 @@
 # Локальный аналог tools/build-windows.ps1: версия и номер сборки - из
 # pubspec.yaml, дата сборки передаётся через --dart-define BUILD_DATE.
 #
-# Требует: flutter в PATH и Xcode (Command Line Tools достаточно).
+# Требует: flutter в PATH и полный Xcode (в Command Line Tools нет xcodebuild).
 # Сторонние утилиты не нужны: разметку окна DMG делает Finder через
 # AppleScript (как create-dmg, но управляемо): монтируем СВОЙ свежий
 # образ в свою точку, настраиваем вид и отмонтируем только её -

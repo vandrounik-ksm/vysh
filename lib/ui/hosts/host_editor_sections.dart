@@ -352,7 +352,7 @@ class _EditorActions extends StatelessWidget {
             ),
           const Spacer(),
           withShortcut(
-            'Ctrl+Shift+Enter',
+            PlatformCapabilities.isMacOS ? '⌘⇧Enter' : 'Ctrl+Shift+Enter',
             TextButton(
               onPressed: saving ? null : onSaveAndConnect,
               child: Text(strings.saveAndConnect),
@@ -360,7 +360,7 @@ class _EditorActions extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           withShortcut(
-            'Ctrl+Enter',
+            PlatformCapabilities.isMacOS ? '⌘Enter' : 'Ctrl+Enter',
             FilledButton(onPressed: saving ? null : onSave, child: Text(strings.save)),
           ),
         ],

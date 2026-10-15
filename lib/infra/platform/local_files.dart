@@ -13,37 +13,9 @@ class LocalFiles {
     if (kIsWeb) return '/Downloads';
     try {
       final env = Platform.environment;
-      final home = env['HOME'] ?? env['USERPROFILE'] ?? Directory.current.path;
-      return home;
+      return env['HOME'] ?? env['USERPROFILE'] ?? Directory.current.path;
     } catch (_) {
       return '/Downloads';
-    }
-  }
-
-  /// macOS: настоящий домашний каталог пользователя вне контейнера
-  /// App Sandbox. Под песочницей HOME - путь контейнера, а USER -
-  /// короткое имя пользователя. Чтение (в т. ч. ~/.ssh) из него
-  /// разрешено; запись - только в разрешённые entitlements места
-  /// (Загрузки, выбранные пользователем папки).
-  static String? macRealHome() {
-    if (kIsWeb) return null;
-    try {
-      if (!Platform.isMacOS) return null;
-      final env = Platform.environment;
-      final user = env['USER'] ?? env['LOGNAME'];
-      if (user != null && user.isNotEmpty) {
-        final home = '/Users/$user';
-        if (Directory(home).existsSync()) return home;
-      }
-      final home = env['HOME'] ?? '';
-      final i = home.indexOf('/Library/Containers/');
-      if (i > 0) {
-        final cut = home.substring(0, i);
-        if (Directory(cut).existsSync()) return cut;
-      }
-      return null;
-    } catch (_) {
-      return null;
     }
   }
 
@@ -163,18 +135,6 @@ class LocalFiles {
       if (Platform.isAndroid) {
         return Directory.systemTemp.path;
       }
-      if (Platform.isMacOS) {
-        // Настоящая папка Загрузок пользователя. App Sandbox с
-        // entitlement com.apple.security.files.downloads.read-write
-        // разрешает запись туда напрямую; HOME под песочницей
-        // указывает на контейнер - оттуда путь не годится.
-        final real = macRealHome();
-        if (real != null) {
-          final dir = join(real, 'Downloads');
-          if (Directory(dir).existsSync()) return dir;
-        }
-        return join(_home, 'Downloads');
-      }
       if (Platform.isLinux) {
         // XDG_DOWNLOAD_DIR из ~/.config/user-dirs.dirs (бывает «Загрузки»).
         try {
@@ -229,24 +189,8 @@ class LocalFiles {
   /// Временная папка для открытия файлов во внешнем редакторе.
   /// Заодно убирает такие папки старше суток: сразу после закрытия вкладки
   /// их не удаляем, чтобы не отобрать файл у ещё открытого редактора.
-  ///
-  /// macOS: под App Sandbox системная tmp лежит в невидимом контейнере
-  /// приложения - файл, открытый «в редакторе», пропадал «вникуда».
-  /// Держим копию в системной «Загрузках» (vysh-edit-*, запись разрешена
-  /// entitlement'ом): пользователь её видит, и чистится она так же.
   static Future<Directory> editTempDir() async {
-    final Directory base;
-    if (!kIsWeb && Platform.isMacOS) {
-      final real = macRealHome();
-      final downloads = real != null ? join(real, 'Downloads') : null;
-      if (downloads != null && await Directory(downloads).exists()) {
-        base = Directory(downloads);
-      } else {
-        base = Directory.systemTemp;
-      }
-    } else {
-      base = Directory.systemTemp;
-    }
+    final base = Directory.systemTemp;
     try {
       final old = DateTime.now().subtract(const Duration(days: 1));
       await for (final e in base.list(followLinks: false)) {

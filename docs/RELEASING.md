@@ -127,15 +127,15 @@ flutter build apk --release --dart-define="BUILD_DATE=$(date '+%d.%m.%y %H:%M:%S
 
 ## macOS
 
-CI собирает `vysh-<тег>-macos.dmg` на `macos-latest` без каких-либо секретов: приложения Flutter подписываются ad-hoc, Gatekeeper при первом запуске спрашивает подтверждение (ПКМ → «Открыть»). Для бесшовного запуска и нотаризации нужен аккаунт Apple Developer и сертификат «Developer ID Application» - добавляется так же, как Android-секреты, когда понадобится.
+CI собирает `vysh-<тег>-macos.dmg` на `macos-latest` без каких-либо секретов: приложения Flutter подписываются ad-hoc, и Gatekeeper блокирует первый запуск, пока пользователь не нажмёт «Всё равно открыть» в настройках конфиденциальности (на macOS 12-14 - ПКМ → «Открыть»). Проверка сборки без релиза - workflow `macOS DMG` (`.github/workflows/macos-dmg.yml`): идёт на PR и вручную, DMG остаётся артефактом запуска. Для бесшовного запуска и нотаризации нужен аккаунт Apple Developer и сертификат «Developer ID Application» - добавляется так же, как Android-секреты, когда понадобится.
 
 ### Локальная сборка DMG
 
 ```sh
-./tools/build_dmg.sh    # flutter build macos --release + hdiutil/create-dmg
+./tools/build_dmg.sh    # flutter build macos --release + hdiutil, окно DMG оформляет Finder
 ```
 
-Требуется Xcode (для сборки достаточно Command Line Tools: `xcode-select --install`). App Sandbox включён в entitlements: сетевой клиент, доступ к выбранным пользователем файлам и папке Загрузок; профиль лежит в `~/Library/Application Support/vysh` внутри контейнера приложения.
+Требуется полный Xcode: `flutter build macos` вызывает `xcodebuild`, которого нет в Command Line Tools. App Sandbox выключен намеренно: SSH-клиенту нужен `~/.ssh` (ключи по пути из настроек хоста, `id_*` по умолчанию), а песочница пускает только в выбранные файлы и только до перезапуска. Профиль лежит в `~/Library/Application Support/vysh`.
 
 ## Если что-то пошло не так
 

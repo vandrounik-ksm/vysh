@@ -61,7 +61,7 @@ extension HostsStrings on AppStrings {
 
   // Оболочка окна.
   String get closeWithShortcut {
-    final mac = Platform.isMacOS;
+    final mac = _isMac;
     return isRu
         ? 'Закрыть (${mac ? '⌘W' : 'Ctrl+Shift+W'})'
         : 'Close (${mac ? '⌘W' : 'Ctrl+Shift+W'})';
