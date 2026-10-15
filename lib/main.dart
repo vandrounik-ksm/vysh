@@ -13,6 +13,7 @@ import 'app/dependencies.dart';
 import 'infra/platform/window_placement.dart';
 import 'infra/storage/app_paths.dart';
 import 'infra/storage/json_store.dart';
+import 'l10n/app_strings.dart';
 import 'ui/dialogs/session_prompt_dialogs.dart';
 import 'ui/widgets/modifiers.dart';
 
@@ -25,6 +26,7 @@ Future<void> main() async {
         _catppuccinLicense,
       )));
   await AppPaths.init();
+  final profileFree = await AppPaths.lockProfile();
 
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
@@ -65,12 +67,39 @@ Future<void> main() async {
     });
   }
 
+  if (!profileFree) {
+    runApp(const _AlreadyRunning());
+    return;
+  }
+
   runApp(ProviderScope(
     overrides: [
       sessionPromptsProvider.overrideWithValue(DialogSessionPrompts(rootNavigatorKey)),
     ],
     child: const VyshApp(),
   ));
+}
+
+/// Второй экземпляр: только сообщение, профиль не трогаем.
+class _AlreadyRunning extends StatelessWidget {
+  const _AlreadyRunning();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStrings.forLanguage(AppLanguage.auto);
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(s.alreadyRunning, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: () => exit(0), child: Text(s.close)),
+          ]),
+        ),
+      ),
+    );
+  }
 }
 
 const _catppuccinLicense = '''MIT License

@@ -99,7 +99,13 @@ class NetDiag {
 
   void stop() {
     _stopped = true;
-    _process?.kill();
+    final p = _process;
+    // На Windows утилита - дочерний процесс cmd: kill() убил бы только cmd.
+    if (p != null && !kIsWeb && Platform.isWindows) {
+      Process.run('taskkill', ['/PID', '${p.pid}', '/T', '/F']).ignore();
+    } else {
+      p?.kill();
+    }
     _socket?.destroy();
   }
 

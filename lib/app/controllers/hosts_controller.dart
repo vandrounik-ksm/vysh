@@ -8,6 +8,7 @@ import '../../infra/platform/net_resolve.dart';
 import '../../domain/models/host.dart';
 import '../../domain/ports/secret_store.dart';
 import '../dependencies.dart';
+import '../terminal/terminal_session.dart';
 
 final hostsProvider = NotifierProvider<HostsController, List<Host>>(HostsController.new);
 
@@ -80,7 +81,10 @@ class HostsController extends Notifier<List<Host>> {
       forgetSessionPasswords(host.id);
     }
     final secrets = ref.read(secretStoreProvider);
-    if (host.auth != AuthMethod.password || !remember) {
+    // Хост направили на другой сервер: сохранённый пароль прежнего туда не отдаём.
+    final retargeted = previous != null &&
+        TerminalSession.targetOf(previous) != TerminalSession.targetOf(host);
+    if (host.auth != AuthMethod.password || !remember || (retargeted && password.isEmpty)) {
       // Пароль не нужен или его просили не хранить - убираем сохранённый.
       try {
         await secrets.delete(passwordKey(host.id));

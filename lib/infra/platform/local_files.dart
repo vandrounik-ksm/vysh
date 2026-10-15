@@ -205,6 +205,12 @@ class LocalFiles {
     return base.createTemp('vysh-edit-');
   }
 
+  /// Расширения, которые Windows по двойному клику запускает, а не открывает.
+  static final windowsRunnable = RegExp(
+    r'\.(exe|com|bat|cmd|ps1|psm1|vbs|vbe|js|jse|wsf|wsh|hta|msi|msp|scr|pif|cpl|lnk|url|reg|jar|msc|scf|appref-ms|application)$',
+    caseSensitive: false,
+  );
+
   /// Открыть файл программой по умолчанию. Бросает исключение при ошибке.
   ///
   /// Windows: не через `cmd /c start` - cmd разбирает строку сам, и имя файла
@@ -213,9 +219,15 @@ class LocalFiles {
   static Future<void> openWithSystem(String path) async {
     if (kIsWeb) return;
     if (Platform.isWindows) {
+      final url = RegExp(r'^https?://', caseSensitive: false).hasMatch(path);
+      // «Открыть» такой файл значит запустить его - скрипт с сервера
+      // выполнился бы здесь. Показываем текст.
+      if (!url && windowsRunnable.hasMatch(path)) {
+        await Process.start('notepad.exe', [path], mode: ProcessStartMode.detached);
+        return;
+      }
       // Файл - Invoke-Item -LiteralPath (без разбора `[`/`*` как шаблона),
       // ссылку - Start-Process.
-      final url = RegExp(r'^https?://', caseSensitive: false).hasMatch(path);
       final r = await Process.run(
         'powershell.exe',
         [

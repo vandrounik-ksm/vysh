@@ -66,6 +66,9 @@ class AppStrings {
   String get retry => isRu ? 'Повторить попытку' : 'Retry';
   String get dismiss => isRu ? 'Скрыть' : 'Dismiss';
   String get more => isRu ? 'Ещё' : 'More';
+  String get alreadyRunning => isRu
+      ? 'vysh уже запущен.\nПереключитесь на открытое окно.'
+      : 'vysh is already running.\nSwitch to the open window.';
 
   // Навигация и полоса вкладок
   String get home => isRu ? 'Главная' : 'Home';

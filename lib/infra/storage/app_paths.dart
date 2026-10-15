@@ -47,6 +47,29 @@ class AppPaths {
 
   static File file(String name) => File(_join(configDir.path, name));
 
+  /// Держит блокировку профиля, пока процесс жив (ОС снимет её сама).
+  // ignore: unused_field - ссылка держит файл открытым, а с ним и блокировку.
+  static RandomAccessFile? _lock;
+
+  /// false - профиль уже занят другим запущенным vysh: два экземпляра
+  /// перезаписывали бы друг другу hosts.json и known_hosts.json.
+  static Future<bool> lockProfile() async {
+    if (kIsWeb || Platform.isAndroid || Platform.isIOS) return true;
+    try {
+      final f = await file('vysh.lock').open(mode: FileMode.append);
+      try {
+        await f.lock(FileLock.exclusive);
+      } on FileSystemException {
+        await f.close();
+        return false;
+      }
+      _lock = f;
+    } catch (_) {
+      // Файл блокировки не создать - не мешаем запуску.
+    }
+    return true;
+  }
+
   /// Своя папка профиля для тестов.
   @visibleForTesting
   static set configDirForTest(Directory dir) => _configDir = dir;

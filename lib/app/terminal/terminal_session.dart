@@ -93,6 +93,9 @@ class TerminalSession extends ChangeNotifier {
   final KnownHosts knownHosts;
   final void Function(SessionStatus status) onStatus;
 
+  /// Переподключение по Enter - тем же путём, что и кнопка (со свежим хостом).
+  VoidCallback? onReconnect;
+
   /// Эмулятор терминала; размер истории задаётся в настройках.
   final Terminal terminal;
 
@@ -152,11 +155,6 @@ class TerminalSession extends ChangeNotifier {
 
   /// Буква Ctrl-комбинации для клавиши (см. [TerminalInput.ctrlLetter]).
   static String? mapToCtrlChar(String input) => TerminalInput.ctrlLetter(input);
-
-  void sendDirect(String text) {
-    _updateClientTypedCommand(text);
-    _shell?.write(utf8.encode(text));
-  }
 
   void _updateClientTypedCommand(String text) => _typed.feed(text);
 
@@ -425,7 +423,9 @@ class TerminalSession extends ChangeNotifier {
     final s = _strings();
     _info(DesktopEnv.isDesktop ? s.terminalPressEnter : s.terminalPressReconnect);
     terminal.onOutput = (data) {
-      if (data.contains('\r') || data.contains('\n')) connect();
+      if (!data.contains('\r') && !data.contains('\n')) return;
+      final reconnect = onReconnect;
+      reconnect != null ? reconnect() : connect();
     };
   }
 

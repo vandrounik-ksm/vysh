@@ -46,6 +46,7 @@ class TabsController extends Notifier<TabsState> {
       initialPassword: password,
       scrollbackLines: ref.read(settingsProvider).scrollbackLines,
     );
+    session.onReconnect = () => reconnect(tab.id);
     _sessions[tab.id] = session;
     state = TabsState(tabs: [...state.tabs, tab], active: state.tabs.length + 1);
     ref.read(hostsProvider.notifier).touch(host.id);

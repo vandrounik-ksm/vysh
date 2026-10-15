@@ -1,14 +1,12 @@
 package uwu.vyto4ka.vysh
 
 import android.Manifest
-import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Environment
 import android.os.Build
 import android.provider.DocumentsContract
-import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -125,40 +123,6 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                 }
-                "setIcon" -> {
-                    // Monet is the only supported launcher icon. Keep the method for
-                    // settings/state migration and make all calls idempotent.
-                    try {
-                        val monetAlias = ComponentName(packageName, "$packageName.MainActivityMonet")
-                        packageManager.setComponentEnabledSetting(
-                            monetAlias,
-                            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                            PackageManager.DONT_KILL_APP
-                        )
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("ICON_ERROR", e.message, null)
-                    }
-                }
-                "openLanguageSettings" -> {
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            val intent = Intent(Settings.ACTION_APP_LOCALE_SETTINGS).apply {
-                                data = Uri.parse("package:$packageName")
-                            }
-                            startActivity(intent)
-                            result.success(true)
-                        } else {
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.parse("package:$packageName")
-                            }
-                            startActivity(intent)
-                            result.success(true)
-                        }
-                    } catch (e: Exception) {
-                        result.error("SETTINGS_ERROR", e.message, null)
-                    }
-                }
                 else -> result.notImplemented()
             }
         }
@@ -209,17 +173,21 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleSave(call: MethodCall, result: MethodChannel.Result) {
-        try {
-            // Файл уже скачан во временный путь - переносим его в общую Download.
-            val tempPath = call.argument<String>("tempPath") ?: ""
-            val name = call.argument<String>("name") ?: ""
-            val subDir = call.argument<String>("subDir") ?: ""
-            val mimeType = call.argument<String>("mimeType")
-                ?: "application/octet-stream"
-            result.success(saveToDownloads(tempPath, name, subDir, mimeType).toString())
-        } catch (e: Exception) {
-            result.error("SAVE_ERROR", e.message ?: e.toString(), null)
-        }
+        // Файл уже скачан во временный путь - переносим его в общую Download.
+        val tempPath = call.argument<String>("tempPath") ?: ""
+        val name = call.argument<String>("name") ?: ""
+        val subDir = call.argument<String>("subDir") ?: ""
+        val mimeType = call.argument<String>("mimeType")
+            ?: "application/octet-stream"
+        // Копия гигабайтного файла в главном потоке - «Приложение не отвечает».
+        Thread {
+            try {
+                val uri = saveToDownloads(tempPath, name, subDir, mimeType).toString()
+                runOnUiThread { result.success(uri) }
+            } catch (e: Exception) {
+                runOnUiThread { result.error("SAVE_ERROR", e.message ?: e.toString(), null) }
+            }
+        }.start()
     }
 
     /// Переносит скачанный во временный путь файл в общую папку Download.

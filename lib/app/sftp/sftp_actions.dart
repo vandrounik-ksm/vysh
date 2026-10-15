@@ -103,7 +103,8 @@ class SftpActions {
     }
   }
 
-  String _enqueueUpload(SftpSession sftp, File file, String remote, void Function()? onDone) {
+  String _enqueueUpload(SftpSession sftp, File file, String remote, void Function()? onDone,
+      {void Function()? onSettled}) {
     final size = file.existsSync() ? file.lengthSync() : 0;
     return queue.enqueue(
       tabId: tabId,
@@ -115,6 +116,7 @@ class SftpActions {
       run: (cancel, progress) =>
           sftp.upload(file, remote, cancel: cancel, onProgress: progress),
       onDone: onDone,
+      onSettled: onSettled,
     );
   }
 
@@ -283,6 +285,7 @@ class _LocalEdit implements LocalEditHandle {
   Timer? _debounce;
   late DateTime _lastModified;
   bool _closed = false;
+  bool _uploading = false;
 
   String get _fileName => local.path.split(RegExp(r'[\\/]')).last;
 
@@ -306,15 +309,25 @@ class _LocalEdit implements LocalEditHandle {
       close();
       return;
     }
+    // Одна загрузка за раз: иначе более старая могла бы закончиться позже
+    // и затереть на сервере новую. Сохранения за время загрузки догонит
+    // повторная проверка по её окончании.
+    if (_uploading) return;
     if (!await local.exists()) return;
     final m = await local.lastModified();
     if (!m.isAfter(_lastModified)) return;
     _lastModified = m;
+    _uploading = true;
     try {
       final sftp = await session.sftp();
       if (_closed) return;
-      actions._enqueueUpload(sftp, local, entry.path, () => onUploaded(entry.name));
+      actions._enqueueUpload(sftp, local, entry.path, () => onUploaded(entry.name),
+          onSettled: () {
+        _uploading = false;
+        _check();
+      });
     } catch (e) {
+      _uploading = false;
       onError((s) => s.editUploadFailed(entry.name, e));
     }
   }

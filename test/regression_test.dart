@@ -55,6 +55,17 @@ class _Prompts implements SessionPrompts {
   }
 }
 
+class _HostKeyPrompts extends _Prompts {
+  bool answer = false;
+  final asked = <String?>[];
+  @override
+  Future<bool> confirmHostKey(Host host,
+      {required String type, required String fingerprint, String? previous}) async {
+    asked.add(previous);
+    return answer;
+  }
+}
+
 class _Connector implements SshConnector {
   _Connector(this.run);
   final Future<SshTransport> Function(SshConnectRequest) run;
@@ -191,6 +202,15 @@ void main() {
       }
     });
 
+    test('исполняемые файлы с сервера не запускаются при открытии', () {
+      for (final p in [r'C:\t\deploy.bat', 'x.EXE', 'run.cmd', 'a.lnk', 'b.vbs', 'c.hta']) {
+        expect(LocalFiles.windowsRunnable.hasMatch(p), isTrue, reason: p);
+      }
+      for (final p in ['notes.txt', 'app.log', 'nginx.conf', 'batch.txt', 'exe']) {
+        expect(LocalFiles.windowsRunnable.hasMatch(p), isFalse, reason: p);
+      }
+    });
+
     test('два ожидающих скачивания получают разные пути', () async {
       final dir = await Directory.systemTemp.createTemp('vysh-test-');
       try {
@@ -309,6 +329,43 @@ void main() {
       await connecting;
       expect(cancelled, isTrue);
     });
+  });
+
+  test('ключ сервера: известный принимается молча, сменившийся - только с согласия', () async {
+    final known = KnownHosts(_MemoryStore())
+      ..remember(host.address, host.port, 'ssh-ed25519', 'AAA');
+    final prompts = _HostKeyPrompts();
+    var offered = 'AAA';
+    final accepted = <bool>[];
+    final session = TerminalSession(
+      host: host,
+      connector: _Connector((r) async {
+        accepted.add(await r.verifyHostKey('ssh-ed25519', offered));
+        throw const SshFailure(SshError.connectionLost);
+      }),
+      prompts: prompts,
+      secrets: _Secrets(),
+      knownHosts: known,
+      onStatus: (_) {},
+    );
+    try {
+      await session.connect();
+      expect(accepted.last, isTrue);
+      expect(prompts.asked, isEmpty);
+
+      offered = 'BBB';
+      await session.connect();
+      expect(accepted.last, isFalse);
+      expect(prompts.asked, ['AAA']);
+      expect(known.lookup(host.address, host.port)!.fingerprint, 'AAA');
+
+      prompts.answer = true;
+      await session.connect();
+      expect(accepted.last, isTrue);
+      expect(known.lookup(host.address, host.port)!.fingerprint, 'BBB');
+    } finally {
+      session.dispose();
+    }
   });
 
   test('F07 после смены адреса пароль прежнего сервера не используется', () async {

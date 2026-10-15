@@ -78,6 +78,22 @@ void main() {
     expect(secrets.values, isEmpty);
   });
 
+  test('смена адреса без нового пароля удаляет сохранённый пароль', () async {
+    secrets.values[passwordKey('h1')] = 'old';
+    await c.read(hostsProvider.notifier).saveWithPassword(
+        const Host(id: 'h1', label: '', address: 'b.example'),
+        password: '', remember: true, previous: host, forgetSessionPasswords: (_) {});
+    expect(secrets.values, isEmpty);
+  });
+
+  test('правка без смены адреса сохранённый пароль не трогает', () async {
+    secrets.values[passwordKey('h1')] = 'old';
+    await c.read(hostsProvider.notifier).saveWithPassword(
+        const Host(id: 'h1', label: 'renamed', address: 'a.example'),
+        password: '', remember: true, previous: host, forgetSessionPasswords: (_) {});
+    expect(secrets.values[passwordKey('h1')], 'old');
+  });
+
   test('недоступное хранилище - предупреждение, хост всё равно сохранён', () async {
     secrets.broken = true;
     final w = await c.read(hostsProvider.notifier).saveWithPassword(host,

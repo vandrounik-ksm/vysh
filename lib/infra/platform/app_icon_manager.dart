@@ -37,12 +37,4 @@ abstract final class AppIconManager {
     } catch (_) {}
     return null;
   }
-
-  static Future<void> setIcon() async {
-    if (kIsWeb) return;
-    try {
-      if (!Platform.isAndroid) return;
-      await _channel.invokeMethod<bool>('setIcon');
-    } catch (_) {}
-  }
 }
