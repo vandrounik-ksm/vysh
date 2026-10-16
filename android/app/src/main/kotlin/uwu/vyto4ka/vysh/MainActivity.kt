@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Environment
 import android.os.Build
-import android.provider.DocumentsContract
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -20,6 +19,8 @@ class MainActivity : FlutterActivity() {
     /// Сохранения в Download, ждущие ответа на запрос разрешения (Android 9-).
     private val pendingSaves = mutableListOf<Pair<MethodCall, MethodChannel.Result>>()
     private val storagePermissionRequest = 4041
+    private val notificationsPermissionRequest = 4042
+    private var notificationsAsked = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -29,6 +30,7 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "acquire" -> {
+                    requestNotificationsOnce()
                     val title = call.argument<String>("title") ?: getString(R.string.ssh_connected)
                     result.success(SshForegroundService.start(this, title))
                 }
@@ -71,27 +73,11 @@ class MainActivity : FlutterActivity() {
                 }
                 "revealPath" -> {
                     try {
-                        // Открываем системный экран «Загрузки» - там лежат
-                        // файлы из MediaStore.Downloads, и любой менеджер их видит.
-                        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS)
-                        } else {
-                            Intent(Intent.ACTION_VIEW).apply {
-                                // Приходит либо путь, либо URI опубликованного файла.
-                                val path = call.argument<String>("path") ?: ""
-                                val file = if (path.startsWith("file://")) {
-                                    java.io.File(Uri.parse(path).path ?: "")
-                                } else {
-                                    java.io.File(path)
-                                }
-                                val dir = if (file.isDirectory) file else file.parentFile ?: file
-                                setDataAndType(
-                                    Uri.fromFile(dir),
-                                    DocumentsContract.Document.MIME_TYPE_DIR
-                                )
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            }
-                        }
+                        // Открываем системный экран «Загрузки» - там лежат файлы
+                        // из общей Download, и любой менеджер их видит. Папку по
+                        // пути (file://) открыть нельзя: с targetSdk 24+ такой
+                        // Intent падает с FileUriExposedException (Android 8-9).
+                        val intent = Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS)
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
                         result.success(true)
@@ -138,6 +124,22 @@ class MainActivity : FlutterActivity() {
             result.error("SAVE_ERROR", "Activity destroyed", null)
         }
         super.onDestroy()
+    }
+
+    /// Android 13+: без разрешения уведомление сервиса не видно в шторке,
+    /// и пользователь не знает, что соединение держится в фоне. Спрашиваем
+    /// при первом подключении, один раз за запуск.
+    private fun requestNotificationsOnce() {
+        if (notificationsAsked || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        notificationsAsked = true
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                notificationsPermissionRequest
+            )
+        }
     }
 
     // ─── Скачивание в общую Download ────────────────────────────────
@@ -260,6 +262,8 @@ class MainActivity : FlutterActivity() {
             throw e
         }
         temp.delete()
+        // Чтобы файл сразу появился в «Загрузках» и у других приложений.
+        android.media.MediaScannerConnection.scanFile(this, arrayOf(target.path), null, null)
         return Uri.fromFile(target)
     }
 }

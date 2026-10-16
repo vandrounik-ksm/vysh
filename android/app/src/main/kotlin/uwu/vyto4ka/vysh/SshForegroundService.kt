@@ -76,7 +76,15 @@ class SshForegroundService : Service() {
         val notification = buildNotification(title)
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Android 14+: specialUse - у dataSync на Android 15 лимит
+                // 6 часов в сутки, после него система рвёт SSH-сессии.
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(
                     NOTIFICATION_ID,
                     notification,
@@ -96,8 +104,9 @@ class SshForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    /// Android 15+: у dataSync лимит 6 часов фоновой работы за сутки.
-    /// По истечении нужно остановиться, иначе система завершит приложение.
+    /// Лимит времени для dataSync (на Android 14+ сервис идёт как specialUse,
+    /// лимита нет). По истечении нужно остановиться, иначе система завершит
+    /// приложение.
     override fun onTimeout(startId: Int, fgsType: Int) {
         stopSelf()
     }

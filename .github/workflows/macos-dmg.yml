@@ -47,7 +47,7 @@ jobs:
         # Не tools/build_dmg.sh: оформление окна через Finder AppleScript
         # на CI не сохранится (нет сессии пользователя) - чистый hdiutil.
         run: |
-          BUILD_DATE=$(date -u '+%d.%m.%y %H:%M:%S')
+          BUILD_DATE=$(TZ=UTC git log -1 --date=format-local:'%d.%m.%y %H:%M:%S' --format=%cd)
           flutter build macos --release --dart-define="BUILD_DATE=$BUILD_DATE"
           STAGING=build/dmg_ci_staging
           rm -rf $STAGING && mkdir -p $STAGING

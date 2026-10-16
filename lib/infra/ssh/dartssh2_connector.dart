@@ -214,23 +214,31 @@ class DartSsh2Connector implements SshConnector {
   }
 
   Future<List<SSHKeyPair>> _parseKey(SshKeySource key) async {
-    List<SSHKeyPair> parse() => SSHKeyPair.fromPem(key.pem, key.passphrase);
-    try {
+    // Ошибку ключа разбираем там же, где расшифровка, и возвращаем как
+    // значение: повтор bcrypt в главном потоке (неверная фраза) подвесил бы
+    // интерфейс на секунды.
+    Object parse() {
       try {
-        // Расшифровка ключа (bcrypt) может занять заметное время - в отдельном изоляте.
-        return await Isolate.run(parse);
-      } catch (_) {
-        // Ошибки из изолята приходят «обёрнутыми» - повторяем здесь,
-        // чтобы получить настоящий тип исключения.
-        return parse();
+        return SSHKeyPair.fromPem(key.pem, key.passphrase);
+      } on SSHKeyDecryptError {
+        return SshFailure(SshError.wrongPassphrase, {'key': key.label});
+      } on ArgumentError {
+        return SshFailure(SshError.passphraseRequired, {'key': key.label});
+      } catch (e) {
+        return SshFailure(SshError.keyUnreadable, {'key': key.label, 'detail': '$e'});
       }
-    } on SSHKeyDecryptError {
-      throw SshFailure(SshError.wrongPassphrase, {'key': key.label});
-    } on ArgumentError {
-      throw SshFailure(SshError.passphraseRequired, {'key': key.label});
-    } catch (e) {
-      throw SshFailure(SshError.keyUnreadable, {'key': key.label, 'detail': '$e'});
     }
+
+    Object result;
+    try {
+      // Расшифровка ключа (bcrypt) может занять заметное время - в отдельном изоляте.
+      result = await Isolate.run(parse);
+    } catch (_) {
+      // Сам изолят не запустился - разбираем здесь.
+      result = parse();
+    }
+    if (result is SshFailure) throw result;
+    return result as List<SSHKeyPair>;
   }
 
   SshFailure _networkFailure(Object? e, SshConnectRequest r) {
@@ -270,9 +278,35 @@ class _Transport implements SshTransport {
   }
 
   @override
-  Future<String> exec(String command) async {
-    final out = await _client.run(command, stderr: false);
-    return utf8.decode(out, allowMalformed: true);
+  Future<String> exec(String command, {Duration timeout = const Duration(seconds: 10)}) async {
+    // По таймауту канал закрываем: зависшие команды иначе копились бы
+    // открытыми каналами, и после MaxSessions (у OpenSSH 10) сервер
+    // перестал бы открывать новые - SFTP в том числе.
+    SSHSession? session;
+    var timedOut = false;
+    Future<String> run() async {
+      final s = await _client.execute(command);
+      if (timedOut) {
+        s.close();
+        throw TimeoutException('exec', timeout);
+      }
+      session = s;
+      s.stderr.listen(null, onError: (_) {});
+      final out = BytesBuilder(copy: false);
+      await s.stdout.forEach(out.add);
+      return utf8.decode(out.takeBytes(), allowMalformed: true);
+    }
+
+    try {
+      return await run().timeout(timeout, onTimeout: () {
+        timedOut = true;
+        throw TimeoutException('exec', timeout);
+      });
+    } finally {
+      try {
+        session?.close();
+      } catch (_) {}
+    }
   }
 
   @override

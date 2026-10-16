@@ -236,7 +236,8 @@ abstract interface class SshTransport {
   Future<SftpSession> openSftp();
 
   /// Выполнить команду в отдельном канале и вернуть её stdout.
-  Future<String> exec(String command);
+  /// Не уложилась в [timeout] - канал закрывается, бросается TimeoutException.
+  Future<String> exec(String command, {Duration timeout = const Duration(seconds: 10)});
 
   /// Завершается, когда соединение закрыто (штатно или по ошибке).
   Future<void> get done;

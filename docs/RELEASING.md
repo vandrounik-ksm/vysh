@@ -120,10 +120,14 @@ storeFile=C:/Users/<вы>/keys/vysh-release.jks
 
 ### Дата сборки
 
-В «О программе» показывается `build N · дата`, если при сборке передан `BUILD_DATE`. CI передаёт его сам, локально это делает `tools/build_local.sh`, вручную так:
+В «О программе» показывается `build N · дата`, если при сборке передан `BUILD_DATE`. Дата - время последнего коммита (в CI по UTC), а не момент сборки: `--dart-define` входит в ключ Dart-сборки, и с текущим временем любой повторный запуск пересобирал бы всё заново (Windows: ~100 с вместо ~20). CI передаёт его сам, локально это делают `tools/build_local.sh`, `tools/build-windows.ps1` и `tools/build_dmg.sh`, вручную так:
 ```sh
-flutter build apk --release --dart-define="BUILD_DATE=$(date '+%d.%m.%y %H:%M:%S')"
+flutter build apk --release --dart-define="BUILD_DATE=$(git log -1 --date=format-local:'%d.%m.%y %H:%M:%S' --format=%cd)"
 ```
+
+### Кэш CI
+
+Релиз собирается на теге, а кэш, сохранённый на теге, следующему тегу недоступен - только кэш ветки main. Поэтому `warm-cache.yml` собирает Windows и Android в main (на изменения кода и раз в неделю): он сохраняет кэш Flutter SDK, пакетов и Gradle, а релиз его читает. Заодно это проверка, что эти сборки не сломаны, до тега.
 
 ## macOS
 

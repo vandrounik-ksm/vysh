@@ -79,8 +79,7 @@ class _ServerStatsViewState extends State<ServerStatsView> {
     _busy = true;
     try {
       final raw = await widget.session
-          .exec(serverStatsCommand)
-          .timeout(const Duration(seconds: 5));
+          .exec(serverStatsCommand, timeout: const Duration(seconds: 5));
       final s = _sampler.parse(raw, DateTime.now());
       if (!mounted) return;
       setState(() {

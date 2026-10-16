@@ -11,8 +11,13 @@ Set-Location (Split-Path $PSScriptRoot -Parent)
 $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([^\s+]+)').Matches[0].Groups[1].Value
 Write-Host "==> vysh $version" -ForegroundColor Cyan
 
-Write-Host "==> flutter build windows --release" -ForegroundColor Cyan
-flutter build windows --release
+# Build date for "About" = last commit time. Not the current time: it is part
+# of the Dart build key, so every run would rebuild everything (~100s vs ~20s).
+$buildDate = git log -1 '--date=format-local:%d.%m.%y %H:%M:%S' --format=%cd
+if ($LASTEXITCODE -ne 0 -or -not $buildDate) { $buildDate = Get-Date -Format 'dd.MM.yy HH:mm:ss' }
+
+Write-Host "==> flutter build windows --release ($buildDate)" -ForegroundColor Cyan
+flutter build windows --release "--dart-define=BUILD_DATE=$buildDate"
 if ($LASTEXITCODE -ne 0) { throw "flutter build failed" }
 
 $src = "build\windows\x64\runner\Release"

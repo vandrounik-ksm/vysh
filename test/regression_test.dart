@@ -108,7 +108,7 @@ class _Transport implements SshTransport {
   @override
   String? get serverVersion => 'test';
   @override
-  Future<String> exec(String command) async => '';
+  Future<String> exec(String command, {Duration timeout = const Duration(seconds: 10)}) async => '';
   @override
   Future<SftpSession> openSftp() async => throw UnimplementedError();
 }

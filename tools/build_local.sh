@@ -9,7 +9,9 @@
 #  (app-<abi>-release.apk), поэтому переименовываем сами.
 set -euo pipefail
 export GRADLE_OPTS="--enable-native-access=ALL-UNNAMED${GRADLE_OPTS:+ $GRADLE_OPTS}"
-build_date="$(date '+%d.%m.%y %H:%M:%S')"
+# Дата сборки - время последнего коммита: она входит в ключ Dart-сборки, и
+# с текущим временем каждый запуск пересобирал бы всё заново (~100 с вместо ~20).
+build_date="$(git log -1 --date=format-local:'%d.%m.%y %H:%M:%S' --format=%cd 2>/dev/null || date '+%d.%m.%y %H:%M:%S')"
 target="${1:-apk}"
 shift || true
 case "$target" in

@@ -327,12 +327,12 @@ class TerminalSession extends ChangeNotifier {
   }
 
   /// Выполнить команду на сервере отдельным каналом (для статистики).
-  Future<String> exec(String command) {
+  Future<String> exec(String command, {Duration timeout = const Duration(seconds: 10)}) {
     final transport = _transport;
     if (transport == null || _status != SessionStatus.ready) {
       return Future.error(StateError('no connection'));
     }
-    return transport.exec(command);
+    return transport.exec(command, timeout: timeout);
   }
 
   /// Сбросить SFTP-канал (после ошибки), следующий [sftp] откроет новый.

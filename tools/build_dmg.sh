@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Сборка vysh.app для macOS и упаковка в DMG с оформлением.
 # Локальный аналог tools/build-windows.ps1: версия и номер сборки - из
-# pubspec.yaml, дата сборки передаётся через --dart-define BUILD_DATE.
+# pubspec.yaml, дата сборки (время коммита) - через --dart-define BUILD_DATE.
 #
 # Требует: flutter в PATH и полный Xcode (в Command Line Tools нет xcodebuild).
 # Сторонние утилиты не нужны: разметку окна DMG делает Finder через
@@ -19,7 +19,9 @@ if ! command -v flutter >/dev/null 2>&1; then
 fi
 command -v flutter >/dev/null 2>&1 || { echo "Ошибка: flutter не найден в PATH" >&2; exit 1; }
 
-BUILD_TIME=$(date '+%d.%m.%y %H:%M:%S')
+# Время последнего коммита, а не текущее: иначе каждый запуск - полная
+# пересборка Dart, даже если код не менялся.
+BUILD_TIME=$(git log -1 --date=format-local:'%d.%m.%y %H:%M:%S' --format=%cd 2>/dev/null || date '+%d.%m.%y %H:%M:%S')
 VERSION=$(sed -nE 's/^version:[[:space:]]*//p' pubspec.yaml | head -n1 | cut -d'+' -f1)
 BUILD_NUM=$(sed -nE 's/^version:[[:space:]]*//p' pubspec.yaml | head -n1 | cut -d'+' -f2)
 [ -n "$VERSION" ] || VERSION="0.0.0"

@@ -1,0 +1,60 @@
+name: Windows и Android
+
+# Сборка Windows и Android в main - прогрев кэша для релиза и заодно
+# проверка, что сборки не сломаны (как macos-dmg.yml для macOS).
+#
+# Зачем прогрев: релиз собирается на теге, а кэш, сохранённый на теге,
+# другим тегам недоступен - только кэш из main. Без этого workflow
+# Windows-джоба релиза каждый раз заново качала Flutter SDK, собирала
+# flutter_tools и пакеты (~2,5 мин), Android - Gradle и зависимости.
+# Расписание раз в неделю: GitHub удаляет кэш, который 7 дней не читали.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - 'android/**'
+      - 'lib/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'third_party/**'
+      - '.github/workflows/warm-cache.yml'
+
+env:
+  # Та же версия, что в release.yml: иначе ключ кэша не совпадёт.
+  FLUTTER_VERSION: 3.47.6
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter build windows --release
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      # Без key.properties подпись debug-ключом - APK здесь не публикуется.
+      - run: flutter build apk --release --split-per-abi
