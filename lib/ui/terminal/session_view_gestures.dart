@@ -387,7 +387,16 @@ mixin _PointerGestures on _SessionViewBase {
     _lastPinchFontSize = null;
   }
 
+  /// Палец или кнопка мыши отпущены. Флаг снимаем кадром позже: двойной
+  /// клик xterm2 ставит выделение уже после события отпускания.
+  void _endUserSelection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_activePointerIds.isEmpty) _userSelecting = false;
+    });
+  }
+
   void _onPointerDown(PointerDownEvent event) {
+    _userSelecting = true;
     // Мышь (ПК): выделение без «уезжания» при прокрутке и вставка средней
     // кнопкой. Правый клик обрабатывает TerminalView.onSecondaryTapDown.
     // Жесты ниже (долгое нажатие, щипок) - только для пальца.
@@ -449,6 +458,7 @@ mixin _PointerGestures on _SessionViewBase {
   }
 
   void _onPointerUp(PointerUpEvent event) {
+    _endUserSelection();
     if (event.kind == PointerDeviceKind.mouse) {
       _dragFix.onPointerUp(event);
       return;
@@ -474,6 +484,7 @@ mixin _PointerGestures on _SessionViewBase {
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
+    _endUserSelection();
     if (event.kind == PointerDeviceKind.mouse) {
       _dragFix.onPointerUp(event);
       return;

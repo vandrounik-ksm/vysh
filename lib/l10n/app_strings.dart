@@ -8,6 +8,7 @@ import '../app/settings/app_settings.dart';
 import '../domain/models/local_file_failure.dart';
 import '../domain/ports/sftp.dart';
 import '../domain/ports/ssh_transport.dart';
+import '../domain/services/font_info.dart' show AddFontError;
 
 part 'connection_strings.dart';
 part 'hosts_strings.dart';
@@ -199,6 +200,26 @@ class AppStrings {
   String get rememberTerminalFontSizeDesc => isRu
       ? 'Сохранять размер между запусками приложения'
       : 'Keep the terminal font size between app launches';
+  String get terminalFontTitle => isRu ? 'Шрифт' : 'Font';
+  String get fontDefault => isRu ? 'По умолчанию' : 'Default';
+  String get fontNotFound => isRu ? 'не найден' : 'not found';
+  String get addFont => isRu ? 'Добавить шрифт…' : 'Add font…';
+  String get removeFont => isRu ? 'Удалить шрифт' : 'Remove font';
+  String get nerdFontsLink => isRu ? 'Где взять Nerd Font' : 'Get a Nerd Font';
+  String get lineHeightTitle => isRu ? 'Межстрочный интервал' : 'Line spacing';
+  String fontAdded(String family) => isRu ? 'Добавлен шрифт $family' : 'Font $family added';
+  String fontNotMonospace(String family) => isRu
+      ? '$family не моноширинный: символы будут разной ширины'
+      : '$family is not monospaced: characters will have different widths';
+  String fontAddFailed(AddFontError error, int maxMb, String detail) => switch (error) {
+        AddFontError.tooLarge =>
+          isRu ? 'Файл больше $maxMb МБ' : 'The file is larger than $maxMb MB',
+        AddFontError.notFont =>
+          isRu ? 'Это не шрифт TTF или OTF' : 'Not a TTF or OTF font',
+        AddFontError.copyFailed => isRu
+            ? 'Не удалось скопировать шрифт: $detail'
+            : 'Could not copy the font: $detail',
+      };
   String get copyOnSelectTitle =>
       isRu ? 'Копировать при выделении' : 'Copy on select';
   String get copyOnSelectMobileDesc => isRu

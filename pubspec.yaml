@@ -1,7 +1,7 @@
 name: vysh
 description: "Минималистичный и красивый SSH-менеджер подключений для Windows, Linux, macOS и Android."
 publish_to: 'none'
-version: 0.5.3+58
+version: 0.5.4+59
 
 environment:
   sdk: ^3.8.0
@@ -35,3 +35,13 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/vysh_256.png
+    - assets/fonts/OFL.txt
+  # Шрифт терминала по умолчанию на macOS и Android, на Windows и Linux -
+  # в запасной цепочке. Вариант NL (без лигатур), только два начертания:
+  # около 420 КБ. Курсив Flutter наклонит сам.
+  fonts:
+    - family: JetBrains Mono NL
+      fonts:
+        - asset: assets/fonts/JetBrainsMonoNL-Regular.ttf
+        - asset: assets/fonts/JetBrainsMonoNL-Bold.ttf
+          weight: 700

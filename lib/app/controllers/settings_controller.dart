@@ -41,6 +41,10 @@ class SettingsController extends Notifier<AppSettings> {
     }
   }
 
+  void setTerminalFont(String value) => _update(state.copyWith(terminalFont: value));
+  void setTerminalLineHeight(double v) =>
+      _update(state.copyWith(terminalLineHeight: (v.clamp(1.0, 1.6) * 20).round() / 20));
+
   void setCopyOnSelect(bool value) =>
       _update(state.copyWith(copyOnSelect: value));
   void setPingHosts(bool v) => _update(state.copyWith(pingHosts: v));

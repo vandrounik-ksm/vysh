@@ -37,6 +37,7 @@ vysh объединяет в одном окне список серверов, 
 - Два режима копирования и вставки: как в Linux (выделение и средняя кнопка мыши) или сочетаниями `Ctrl+Shift+C` / `Ctrl+Shift+V`. Вставка по правому клику включается отдельно.
 - Подтверждение перед вставкой нескольких строк, чтобы исключить случайный запуск команд.
 - Выделение мышью с автопрокруткой; объём истории настраивается от 1 тыс. до 1 млн строк.
+- Шрифт на выбор: любой моноширинный из установленных в системе или свой файл `.ttf` / `.otf`, межстрочный интервал от 1.0 до 1.6. В macOS и Android по умолчанию JetBrains Mono из сборки; кириллица и значки Nerd Font берутся из запасных шрифтов, если их нет в выбранном.
 - Переподключение клавишей Enter после обрыва соединения.
 - Нагрузка сервера в строке состояния: CPU, память, диск, сеть и время работы (для Linux-серверов).
 
@@ -128,7 +129,7 @@ tar -xzf vysh-<версия>-linux-x64.tar.gz -C ~/.local/opt/vysh
 
 | | Windows | Linux | macOS | Android |
 |---|---|---|---|---|
-| Хосты, настройки, `known_hosts.json` | `%APPDATA%\vysh` | `~/.config/vysh` | `~/Library/Application Support/vysh` | внутреннее хранилище приложения |
+| Хосты, настройки, `known_hosts.json`, добавленные шрифты (`fonts/`) | `%APPDATA%\vysh` | `~/.config/vysh` | `~/Library/Application Support/vysh` | внутреннее хранилище приложения |
 | Пароли и парольные фразы | DPAPI (привязаны к учётной записи) | Secret Service (gnome-keyring, KWallet, KeePassXC) | Keychain | Android Keystore |
 
 Файлы хостов и настроек представляют собой обычный JSON без секретов: их можно хранить в git или синхронизировать, например, через Syncthing. Переменная окружения `VYSH_CONFIG_DIR` позволяет запустить vysh с отдельной папкой профиля. При каждом сохранении прежняя версия остаётся рядом в `.bak`.
@@ -188,7 +189,7 @@ flutter run -d <устройство>    # отладка
 
 ## Технологии
 
-[Flutter](https://flutter.dev) · [Riverpod](https://riverpod.dev) · [dartssh2](https://pub.dev/packages/dartssh2) (SSH и SFTP) · [xterm2](https://pub.dev/packages/xterm2) (терминал) · [flutter_secure_storage](https://pub.dev/packages/flutter_secure_storage)
+[Flutter](https://flutter.dev) · [Riverpod](https://riverpod.dev) · [dartssh2](https://pub.dev/packages/dartssh2) (SSH и SFTP) · [xterm2](https://pub.dev/packages/xterm2) (терминал) · [flutter_secure_storage](https://pub.dev/packages/flutter_secure_storage) · [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) (шрифт)
 
 Версия для Android подготовлена [Gitveu](https://github.com/Gitveu) ([vysh-apk](https://github.com/Gitveu/vysh-apk)).
 
@@ -206,7 +207,9 @@ flutter run -d <устройство>    # отладка
 - [x] Android
 - [x] Нагрузка сервера в строке состояния, темы Catppuccin
 - [x] macOS (нативный светофор, ⌘-шорткаты, Keychain, DMG в релизах)
+- [x] Выбор шрифта терминала, JetBrains Mono в сборках для macOS и Android
 - [ ] AppImage, .deb, AUR, установщик для Windows, поддержка отечественных дистрибутивов
+- [ ] Импорт `~/.ssh/config`, палитра команд `Ctrl+K`, поиск в терминале
 - [ ] Сниппеты, проброс портов, jump host, разделение вкладки на панели
 - [ ] ssh-agent / Pageant, хранилище с мастер-паролем
 
@@ -216,4 +219,4 @@ vysh - свободная программа: её можно использов
 
 Copyright © vyto4ka и участники проекта.
 
-vysh распространяется без каких-либо гарантий, подробности в [LICENSE](LICENSE). Лицензии сторонних компонентов (Flutter, dartssh2, xterm2 и других) открываются в «Настройки → О программе → Лицензии компонентов»; копия xterm2 с изменениями лежит в [third_party/xterm2](third_party/xterm2/PATCHES.md) под своей лицензией MIT.
+vysh распространяется без каких-либо гарантий, подробности в [LICENSE](LICENSE). Лицензии сторонних компонентов (Flutter, dartssh2, xterm2 и других) открываются в «Настройки → О программе → Лицензии компонентов»; копия xterm2 с изменениями лежит в [third_party/xterm2](third_party/xterm2/PATCHES.md) под своей лицензией MIT. Шрифт JetBrains Mono в [assets/fonts](assets/fonts/OFL.txt) распространяется по SIL Open Font License 1.1.

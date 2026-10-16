@@ -43,6 +43,16 @@ abstract final class PlatformCapabilities {
   /// Системные утилиты сети (ping, traceroute) и процессы.
   static bool get processes => _is(() => !Platform.isAndroid && !Platform.isIOS);
 
+  /// Шрифт терминала по умолчанию - свой из сборки: на macOS и Android
+  /// подходящего моноширинного в системе нет.
+  static bool get bundledMonoFont => _is(() => Platform.isMacOS || Platform.isAndroid);
+
+  /// Список установленных шрифтов можно прочитать из системных папок.
+  static bool get systemFontList => desktopWindow;
+
+  /// Ссылку можно открыть в браузере (на Android openWithSystem не работает).
+  static bool get openLinks => desktopWindow;
+
   /// Можно узнать расход памяти процесса (ProcessInfo).
   static bool get memoryInfo => !kIsWeb;
 }

@@ -9,6 +9,7 @@ import 'package:xterm2/xterm.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../app/settings/app_settings.dart';
+import '../../app/settings/terminal_font.dart';
 import '../../domain/models/session_tab.dart';
 import '../../app/controllers/external_colors_controller.dart';
 import '../../app/controllers/settings_controller.dart';
@@ -77,6 +78,12 @@ abstract class _SessionViewBase extends ConsumerState<SessionView> {
 
   bool _isSelecting = false;
   bool _selectionIsEmptiness = false;
+
+  /// Выделение сейчас меняет пользователь (мышь или палец над терминалом).
+  /// «Копировать при выделении» срабатывает только тогда: иначе любое
+  /// уведомление контроллера (возврат в окно, перерисовка) снова клало
+  /// старое выделение в буфер поверх скопированного в другой программе.
+  bool _userSelecting = false;
 
   bool _isDraggingHandle = false;
   bool? _draggingStartHandle;
@@ -181,7 +188,7 @@ class _SessionViewState extends _SessionViewBase
       return;
     }
 
-    if (!ref.read(settingsProvider).copyOnSelect) {
+    if (!_userSelecting || !ref.read(settingsProvider).copyOnSelect) {
       return;
     }
 
@@ -216,6 +223,8 @@ class _SessionViewState extends _SessionViewBase
           serverStats: s.serverStats,
           fontSize: s.terminalFontSize,
           rememberFontSize: s.rememberTerminalFontSize,
+          font: s.terminalFont,
+          lineHeight: s.terminalLineHeight,
         )));
     final scheme = Theme.of(context).colorScheme;
     final paneOpen = ref.watch(sftpPaneProvider).contains(widget.tab.id);
@@ -264,8 +273,9 @@ class _SessionViewState extends _SessionViewBase
             theme: terminalThemeFor(scheme, ext),
             textStyle: TerminalStyle(
               fontSize: _effectiveFontSize,
-              fontFamily: monoFontFamily,
-              fontFamilyFallback: monoFontFallback,
+              height: settings.lineHeight,
+              fontFamily: TerminalFont.familyOf(settings.font),
+              fontFamilyFallback: TerminalFont.fallbackOf(settings.font),
             ),
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             keyboardType: TextInputType.text,

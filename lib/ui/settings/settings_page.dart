@@ -20,6 +20,7 @@ import 'appearance_sections.dart';
 import 'clipboard_section.dart';
 import 'performance_section.dart';
 import 'setting_row.dart';
+import 'terminal_font_section.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -161,51 +162,7 @@ class SettingsPage extends ConsumerWidget {
                   icon: Icons.terminal,
                   title: strings.terminalSection,
                   children: [
-                    SettingRow(
-                      label: strings.fontSizeTitle,
-                      child: SizedBox(
-                        width: 320,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Slider(
-                                min: 8,
-                                max: 32,
-                                divisions: 24,
-                                value: s.terminalFontSize
-                                    .clamp(8, 32)
-                                    .toDouble(),
-                                label: s.terminalFontSize.round().toString(),
-                                onChanged: ctrl.setTerminalFontSize,
-                              ),
-                            ),
-                            SizedBox(
-                              width: 32,
-                              child: Text(
-                                '${s.terminalFontSize.round()}',
-                                textAlign: TextAlign.end,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerLowest,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'root@server:~\$ htop',
-                        style: monoStyle(
-                          context,
-                          size: s.terminalFontSize,
-                          color: scheme.onSurface,
-                        ),
-                      ),
-                    ),
+                    const TerminalFontSection(),
                     const SizedBox(height: 8),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,

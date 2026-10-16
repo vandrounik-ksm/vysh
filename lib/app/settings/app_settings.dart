@@ -74,6 +74,8 @@ class AppSettings {
     this.compact = false,
     this.terminalFontSize = 14,
     this.rememberTerminalFontSize = true,
+    this.terminalFont = '',
+    this.terminalLineHeight = 1.2,
     this.copyOnSelect = false,
     this.downloadsDir = '',
     this.pingHosts = true,
@@ -104,6 +106,14 @@ class AppSettings {
   final bool compact;
   final double terminalFontSize;
   final bool rememberTerminalFontSize;
+
+  /// Шрифт терминала: '' - по умолчанию, `system:<семейство>`,
+  /// `file:<имя файла>` (см. TerminalFont).
+  final String terminalFont;
+
+  /// Межстрочный интервал терминала, 1.0-1.6.
+  final double terminalLineHeight;
+
   final bool copyOnSelect;
 
   /// Иконка приложения (системная Monet-иконка на Android).
@@ -178,6 +188,8 @@ class AppSettings {
     bool? compact,
     double? terminalFontSize,
     bool? rememberTerminalFontSize,
+    String? terminalFont,
+    double? terminalLineHeight,
     bool? copyOnSelect,
     String? downloadsDir,
     bool? pingHosts,
@@ -209,6 +221,8 @@ class AppSettings {
         terminalFontSize: terminalFontSize ?? this.terminalFontSize,
         rememberTerminalFontSize:
             rememberTerminalFontSize ?? this.rememberTerminalFontSize,
+        terminalFont: terminalFont ?? this.terminalFont,
+        terminalLineHeight: terminalLineHeight ?? this.terminalLineHeight,
         copyOnSelect: copyOnSelect ?? this.copyOnSelect,
         downloadsDir: downloadsDir ?? this.downloadsDir,
         pingHosts: pingHosts ?? this.pingHosts,
@@ -241,6 +255,8 @@ class AppSettings {
         'compact': compact,
         'terminalFontSize': terminalFontSize,
         'rememberTerminalFontSize': rememberTerminalFontSize,
+        'terminalFont': terminalFont,
+        'terminalLineHeight': terminalLineHeight,
         'copyOnSelect': copyOnSelect,
         'downloadsDir': downloadsDir,
         'pingHosts': pingHosts,
@@ -281,6 +297,10 @@ class AppSettings {
             : 14,
         rememberTerminalFontSize:
             json.boolean('rememberTerminalFontSize') ?? true,
+        terminalFont: json.str('terminalFont') ?? '',
+        terminalLineHeight: _finite(json.dbl('terminalLineHeight'), 1.2)
+            .clamp(1.0, 1.6)
+            .toDouble(),
         copyOnSelect: json.boolean('copyOnSelect') ?? false,
         downloadsDir: json.str('downloadsDir') ?? '',
         pingHosts: json.boolean('pingHosts') ?? true,
@@ -325,6 +345,9 @@ class AppSettings {
         catppuccinAccent: json.str('catppuccinAccent') ?? 'mauve',
         serverStats: json.boolean('serverStats') ?? true,
       );
+
+  static double _finite(double? v, double fallback) =>
+      v != null && v.isFinite ? v : fallback;
 
   /// Верхний предел истории: xterm2 сразу резервирует список на столько строк.
   static const maxScrollback = 1000000;

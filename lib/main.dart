@@ -8,8 +8,10 @@ import 'package:window_manager/window_manager.dart';
 
 import 'ui/vysh_app.dart';
 import 'app/settings/app_settings.dart';
+import 'app/settings/terminal_font.dart';
 import 'app/settings/window_chrome.dart';
 import 'app/dependencies.dart';
+import 'infra/platform/font_files.dart';
 import 'infra/platform/window_placement.dart';
 import 'infra/storage/app_paths.dart';
 import 'infra/storage/json_store.dart';
@@ -25,6 +27,13 @@ Future<void> main() async {
         ['Catppuccin (palette)'],
         _catppuccinLicense,
       )));
+  // Шрифт в сборке (assets/fonts) - тоже не пакет.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(
+      const ['JetBrains Mono (font)'],
+      await rootBundle.loadString('assets/fonts/OFL.txt'),
+    );
+  });
   await AppPaths.init();
   final profileFree = await AppPaths.lockProfile();
 
@@ -72,12 +81,25 @@ Future<void> main() async {
     return;
   }
 
+  await _loadTerminalFont();
+
   runApp(ProviderScope(
     overrides: [
       sessionPromptsProvider.overrideWithValue(DialogSessionPrompts(rootNavigatorKey)),
     ],
     child: const VyshApp(),
   ));
+}
+
+/// Свой шрифт терминала (файл из профиля) нужен до первого кадра: иначе
+/// терминал измерит ячейки запасным шрифтом.
+Future<void> _loadTerminalFont() async {
+  try {
+    final raw = JsonStore('settings.json').readSync();
+    if (raw is! Map<String, Object?>) return;
+    final file = TerminalFont.fileName(AppSettings.fromJson(raw).terminalFont);
+    if (file != null && file.isNotEmpty) await FontFiles.loadByFileName(file);
+  } catch (_) {}
 }
 
 /// Второй экземпляр: только сообщение, профиль не трогаем.

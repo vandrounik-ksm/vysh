@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/settings/terminal_font.dart';
 import '../../infra/platform/desktop_env.dart';
 
 /// Предустановленные акцентные цвета (seed для Material You);
@@ -126,24 +127,12 @@ ThemeData buildTheme({
   );
 }
 
-/// Моноширинный шрифт терминала. Nerd Font будет вшит позже.
-const monoFontFamily = 'Cascadia Mono';
-const monoFontFallback = <String>[
-  'JetBrainsMono Nerd Font',
-  'JetBrains Mono',
-  'Consolas',
-  'DejaVu Sans Mono',
-  'Liberation Mono',
-  // macOS: своих моношрифтов нет (Menlo/SF Mono), пока не вшит свой Nerd Font.
-  'Menlo',
-  'Courier New',
-  'monospace',
-];
-
+/// Моноширинный шрифт интерфейса (пути, адреса): шрифт терминала по
+/// умолчанию, без выбора пользователя. Терминал - см. [TerminalFont].
 TextStyle monoStyle(BuildContext context, {double size = 13, Color? color}) =>
     TextStyle(
-      fontFamily: monoFontFamily,
-      fontFamilyFallback: monoFontFallback,
+      fontFamily: TerminalFont.defaultFamily,
+      fontFamilyFallback: TerminalFont.fallbackOf(''),
       fontSize: size,
       height: 1.35,
       color: color,
