@@ -30,6 +30,12 @@ dependency_overrides:
   # flutter_secure_storage 11 - win32 6. API, которым он пользуется
   # (androidInfo.version.sdkInt), в 13.x тот же.
   device_info_plus: ^13.3.0
+  # Копии с правкой сборки под Gradle 9 (project.exec убран), см.
+  # third_party/*/VYSH_PATCH.md. Без них не собирается APK.
+  super_native_extensions:
+    path: third_party/super_native_extensions
+  irondash_engine_context:
+    path: third_party/irondash_engine_context
 
 dev_dependencies:
   flutter_test:
