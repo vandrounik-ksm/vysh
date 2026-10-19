@@ -185,7 +185,9 @@ class SftpActions {
   /// [publishTo] - на Android файл после скачивания публикуется в общую
   /// Download (в эту подпапку); null - не публиковать (локальное редактирование).
   String _enqueueDownload(SftpSession sftp, RemoteEntry e, File local,
-      {String? publishTo, FutureOr<void> Function()? onDone}) {
+      {String? publishTo,
+      FutureOr<void> Function()? onDone,
+      void Function()? onSettled}) {
     // Качаем во временный `.part` рядом: под окончательным именем файл
     // появляется только целым.
     final part = File('${local.path}.vysh-part');
@@ -220,8 +222,69 @@ class SftpActions {
         }
       },
       onDone: onDone,
-      onSettled: () => LocalFiles.releasePath(local.path),
+      onSettled: () {
+        LocalFiles.releasePath(local.path);
+        onSettled?.call();
+      },
     );
+  }
+
+  // ─── Перетаскивание в файловый менеджер ──────────────────────────
+
+  /// Скачать файл или папку во временную папку для перетаскивания.
+  /// Передачи видны в очереди как обычные скачивания; [DragDownload.path]
+  /// завершается, когда скачано всё, или ошибкой, если что-то не вышло.
+  DragDownload downloadForDrag(RemoteEntry e) {
+    final drag = DragDownload._(queue);
+    drag.path = () async {
+      final sftp = await _sftp;
+      final dir = await LocalFiles.dragTempDir();
+      final local = LocalFiles.childPath(dir.path, LocalFiles.safeName(e.name));
+      final waits = <Future<void>>[];
+      if (e.isDir) {
+        await _dragDir(sftp, drag, e.path, Directory(local), waits);
+      } else {
+        waits.add(_dragFile(sftp, drag, e, File(local)));
+      }
+      await Future.wait(waits);
+      if (drag._cancelled) throw const TransferCancelled();
+      return local;
+    }();
+    // Ошибку забирает тот, кто ждёт path; без ожидания она не должна
+    // всплыть необработанной.
+    drag.path.ignore();
+    return drag;
+  }
+
+  Future<void> _dragDir(SftpSession sftp, DragDownload drag, String remote, Directory local,
+      List<Future<void>> waits) async {
+    await local.create(recursive: true);
+    for (final e in await sftp.list(remote)) {
+      if (drag._cancelled) return;
+      final target = LocalFiles.childPath(local.path, LocalFiles.safeName(e.name));
+      if (e.isDir && !e.isLink) {
+        await _dragDir(sftp, drag, e.path, Directory(target), waits);
+      } else if (!e.isDir) {
+        waits.add(_dragFile(sftp, drag, e, File(target)));
+      }
+    }
+  }
+
+  Future<void> _dragFile(SftpSession sftp, DragDownload drag, RemoteEntry e, File local) {
+    final done = Completer<void>();
+    var ok = false;
+    final id = _enqueueDownload(
+      sftp,
+      e,
+      local,
+      onDone: () => ok = true,
+      onSettled: () {
+        if (done.isCompleted) return;
+        ok ? done.complete() : done.completeError(const TransferCancelled());
+      },
+    );
+    drag._ids.add(id);
+    return done.future;
   }
 
   // ─── Открыть локально ────────────────────────────────────────────
@@ -339,5 +402,25 @@ class _LocalEdit implements LocalEditHandle {
     _debounce?.cancel();
     _sub?.cancel();
     actions.session.removeLocalEdit(this);
+  }
+}
+
+/// Скачивание для перетаскивания: путь к копии и отмена всех её передач.
+class DragDownload {
+  DragDownload._(this._queue);
+
+  final TransferQueue _queue;
+  final _ids = <String>[];
+  bool _cancelled = false;
+
+  /// Локальный путь скачанного файла или папки.
+  late final Future<String> path;
+
+  /// Перетаскивание отменили: остановить ещё идущие передачи.
+  void cancel() {
+    _cancelled = true;
+    for (final id in _ids) {
+      _queue.cancel(id);
+    }
   }
 }

@@ -189,12 +189,18 @@ class LocalFiles {
   /// Временная папка для открытия файлов во внешнем редакторе.
   /// Заодно убирает такие папки старше суток: сразу после закрытия вкладки
   /// их не удаляем, чтобы не отобрать файл у ещё открытого редактора.
-  static Future<Directory> editTempDir() async {
+  static Future<Directory> editTempDir() => _tempDir('vysh-edit-');
+
+  /// Временная папка для файлов, которые перетаскивают из панели SFTP в
+  /// файловый менеджер: туда скачивается копия, оттуда её забирает получатель.
+  static Future<Directory> dragTempDir() => _tempDir('vysh-drag-');
+
+  static Future<Directory> _tempDir(String prefix) async {
     final base = Directory.systemTemp;
     try {
       final old = DateTime.now().subtract(const Duration(days: 1));
       await for (final e in base.list(followLinks: false)) {
-        if (e is! Directory || !e.path.split(RegExp(r'[\\/]')).last.startsWith('vysh-edit-')) {
+        if (e is! Directory || !e.path.split(RegExp(r'[\\/]')).last.startsWith(prefix)) {
           continue;
         }
         try {
@@ -202,7 +208,7 @@ class LocalFiles {
         } catch (_) {}
       }
     } catch (_) {}
-    return base.createTemp('vysh-edit-');
+    return base.createTemp(prefix);
   }
 
   /// Расширения, которые Windows по двойному клику запускает, а не открывает.

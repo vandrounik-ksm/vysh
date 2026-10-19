@@ -1,4 +1,3 @@
-import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +17,7 @@ import '../theme/app_theme.dart';
 import '../widgets/context_menu.dart';
 import '../widgets/modifiers.dart';
 import 'sftp_dialogs.dart';
+import 'sftp_drag.dart';
 import 'sftp_entry_row.dart';
 import 'transfers_view.dart';
 
@@ -402,13 +402,17 @@ class _SftpPaneState extends ConsumerState<SftpPane> {
                 );
               }
               final e = list[i - 1];
-              return SftpEntryRow(
+              return SftpDragSource(
                 entry: e,
-                selected: _selected.contains(e.path),
-                onTap: () => _select(e),
-                onDoubleTap: () => _activate(e),
-                onSecondary: (pos) => _contextMenu(e, pos),
-                strings: _s,
+                actions: () => _actions,
+                child: SftpEntryRow(
+                  entry: e,
+                  selected: _selected.contains(e.path),
+                  onTap: () => _select(e),
+                  onDoubleTap: () => _activate(e),
+                  onSecondary: (pos) => _contextMenu(e, pos),
+                  strings: _s,
+                ),
               );
             },
           ),
@@ -468,14 +472,14 @@ class _SftpPaneState extends ConsumerState<SftpPane> {
           if (_loading) const LinearProgressIndicator(minHeight: 2) else const SizedBox(height: 2),
           // Список с приёмом файлов перетаскиванием.
           Expanded(
-            child: DropTarget(
-              enable: widget.active && ready,
-              onDragEntered: (_) => setState(() => _dragOver = true),
-              onDragExited: (_) => setState(() => _dragOver = false),
-              onDragDone: (d) {
-                setState(() => _dragOver = false);
-                final paths = d.files.map((f) => f.path).where((p) => p.isNotEmpty).toList();
-                if (paths.isNotEmpty && _cwd != null) _upload(paths);
+            child: SftpDropZone(
+              enabled: widget.active && ready && _cwd != null,
+              onHover: (over) {
+                if (mounted && _dragOver != over) setState(() => _dragOver = over);
+              },
+              onDropPaths: (paths) {
+                if (mounted) setState(() => _dragOver = false);
+                if (_cwd != null) _upload(paths);
               },
               child: Stack(
                 children: [

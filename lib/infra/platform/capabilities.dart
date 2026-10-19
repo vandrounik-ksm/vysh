@@ -22,6 +22,18 @@ abstract final class PlatformCapabilities {
   static bool get desktopWindow => _is(
       () => Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
+  /// Перетаскивание файлов между панелью SFTP и файловым менеджером.
+  static bool get fileDragAndDrop => desktopWindow;
+
+  /// Перетаскивание наружу «виртуальным файлом»: получатель (Проводник,
+  /// Finder) сам запрашивает содержимое после отпускания. Только файлы.
+  static bool get dragOutVirtualFiles => _is(() => Platform.isWindows || Platform.isMacOS);
+
+  /// Перетаскивание наружу ссылкой на файл (text/uri-list, Linux): копия
+  /// скачивается во временную папку, получатель забирает её оттуда.
+  /// Работает и для папок.
+  static bool get dragOutFileUri => _is(() => Platform.isLinux);
+
   /// Текущая ОС - macOS (нативный светофор, ⌘-шорткаты, свои пути).
   static bool get isMacOS => _is(() => Platform.isMacOS);
 
