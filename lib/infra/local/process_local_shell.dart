@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_pty/flutter_pty.dart';
 
 import '../../domain/ports/local_shell.dart';
 import '../../domain/ports/terminal_shell.dart';
@@ -41,6 +42,11 @@ class ProcessLocalShellLauncher implements LocalShellLauncher {
       'LINES': '$rows',
     };
 
+    if (Platform.isAndroid) {
+      final pty = _tryStartPty(shell, columns, rows, environment);
+      if (pty != null) return pty;
+    }
+
     if (!Platform.isWindows && !Platform.isAndroid) {
       final script = _findExecutable('script');
       if (script != null) {
@@ -59,6 +65,27 @@ class ProcessLocalShellLauncher implements LocalShellLauncher {
       return _ProcessShell(process, pty: false);
     } catch (e) {
       throw LocalShellFailure(LocalShellError.launchFailed, '$e');
+    }
+  }
+
+  TerminalShell? _tryStartPty(
+    String shell,
+    int columns,
+    int rows,
+    Map<String, String> environment,
+  ) {
+    try {
+      return _PtyShell(
+        Pty.start(
+          shell,
+          arguments: _directArguments(),
+          columns: columns,
+          rows: rows,
+          environment: environment,
+        ),
+      );
+    } catch (_) {
+      return null;
     }
   }
 
@@ -315,6 +342,91 @@ class _ProcessShell implements TerminalShell {
     try {
       directory.delete(recursive: true).ignore();
     } catch (_) {}
+  }
+}
+
+/// Оболочка в настоящем псевдотерминале (flutter_pty): эхо ввода, Ctrl+C
+/// и полноэкранные программы работают так же, как по SSH.
+class _PtyShell implements TerminalShell {
+  _PtyShell(this._pty) {
+    _outputDone = _pump(_pty.output);
+    _pty.exitCode.then((_) async {
+      _exited = true;
+      await _outputDone;
+      if (!_output.isClosed) await _output.close();
+      if (!_done.isCompleted) _done.complete();
+    });
+  }
+
+  final Pty _pty;
+
+  final _output = StreamController<Uint8List>();
+  final _done = Completer<void>();
+  late final Future<void> _outputDone;
+  Timer? _resizeTimer;
+  bool _closed = false;
+  bool _exited = false;
+  int _columns = 0;
+  int _rows = 0;
+
+  @override
+  Stream<Uint8List> get output => _output.stream;
+
+  @override
+  Future<void> get done => _done.future;
+
+  @override
+  void write(Uint8List data) {
+    if (_closed || _exited) return;
+    try {
+      _pty.write(data);
+    } catch (_) {}
+  }
+
+  @override
+  void resize(int columns, int rows) {
+    if (_closed || _exited) return;
+    if (columns == _columns && rows == _rows) return;
+    _columns = columns;
+    _rows = rows;
+    _resizeTimer?.cancel();
+    _resizeTimer = Timer(const Duration(milliseconds: 80), () {
+      if (_closed || _exited) return;
+      try {
+        _pty.resize(rows, columns);
+      } catch (_) {}
+    });
+  }
+
+  @override
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    _resizeTimer?.cancel();
+    if (_exited) return;
+    try {
+      _pty.kill(ProcessSignal.sighup);
+    } catch (_) {}
+    Future<void>.delayed(const Duration(milliseconds: 250), () {
+      if (_exited) return;
+      try {
+        _pty.kill();
+      } catch (_) {}
+    });
+  }
+
+  Future<void> _pump(Stream<Uint8List> stream) {
+    final finished = Completer<void>();
+    stream.listen(
+      (data) {
+        if (_output.isClosed) return;
+        _output.add(data);
+      },
+      onError: (_) {},
+      onDone: finished.complete,
+      cancelOnError: false,
+    );
+    return finished.future;
   }
 }
 
